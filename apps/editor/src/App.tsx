@@ -518,15 +518,16 @@ export function App() {
           <button
             aria-pressed={structuredLoggingEnabled}
             data-testid="structured-log-toggle"
-            onClick={() => setStructuredLoggingEnabled((enabled) => !enabled)}
+            onClick={() =>
+              setStructuredLoggingEnabled((enabled) => !enabled)
+            }
             type="button"
           >
             日志{structuredLoggingEnabled ? "开启" : "关闭"}
           </button>
         </nav>
         <p className="editor__debug-status">
-          结构化日志：{structuredLoggingEnabled ? "开启" : "关闭"}
-          ；关闭后不再写入总日志、Console 或预览 Worker 日志回传。
+          结构化日志：{structuredLoggingEnabled ? "开启" : "关闭"}；关闭后不再写入总日志、Console 或预览 Worker 日志回传。
         </p>
         {actions.get("sharedMemory")?.enabled === false ? (
           <p data-testid="shared-memory-diagnosis" role="alert">

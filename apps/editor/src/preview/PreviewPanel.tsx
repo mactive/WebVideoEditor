@@ -139,13 +139,12 @@ export function PreviewPanel({
   const fallbackLogHub = useMemo(() => new LogHub([new ConsoleLogSink()]), []);
   const [snapshot, setSnapshot] = useState(() => initialSnapshot(project));
   const [activeVideoFrames, setActiveVideoFrames] = useState(0);
-  const [runtimeMetrics, setRuntimeMetrics] = useState<RuntimeDashboardSample>(
-    () => ({
+  const [runtimeMetrics, setRuntimeMetrics] =
+    useState<RuntimeDashboardSample>(() => ({
       heap: sampleJsHeapMetrics(),
       sampledAtMs: performance.now(),
       storage: { available: false },
-    }),
-  );
+    }));
   const previewEnabled = actionAvailability?.enabled === true;
   const sourceKey = sources
     .map((source) => {

@@ -52,6 +52,10 @@ export default withMermaid(
           text: "媒体管线",
           items: [
             { text: "Demux / Decode / Encode / Mux", link: "/pipeline/media" },
+            {
+              text: "Mediabunny 与 WebCodecs 数据流",
+              link: "/pipeline/mediabunny-webcodecs",
+            },
             { text: "代理 / OPFS / 缩略图 / 波形", link: "/pipeline/proxy" },
             { text: "音频主时钟同步", link: "/pipeline/av-sync" },
             { text: "原素材高质量导出", link: "/pipeline/export" },
