@@ -1,0 +1,98 @@
+.sync-debug {
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 32px;
+}
+
+.sync-debug--embedded {
+  max-width: none;
+  padding: 16px;
+}
+
+.sync-debug--embedded .sync-debug__header h1 {
+  font-size: 24px;
+}
+
+.sync-debug__header,
+.sync-debug__controls,
+.sync-debug__assets,
+.sync-debug__metrics {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.sync-debug__header {
+  justify-content: space-between;
+}
+
+.sync-debug__header h1 {
+  margin: 4px 0;
+}
+
+.sync-debug__header p {
+  margin: 0;
+}
+
+.sync-debug__assets button[aria-pressed="true"] {
+  border-color: #68d8ff;
+  color: #68d8ff;
+}
+
+.sync-debug__assets button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.sync-debug__diagnosis {
+  color: #ffc6ad;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sync-debug__stage {
+  align-items: center;
+  background: #090b10;
+  border: 1px solid #2d3442;
+  display: flex;
+  justify-content: center;
+  min-height: 540px;
+  overflow: hidden;
+}
+
+.sync-debug__stage canvas {
+  display: block;
+  height: auto;
+  max-height: 540px;
+  max-width: 960px;
+  width: 100%;
+}
+
+.sync-debug__controls input {
+  flex: 1;
+}
+
+.sync-debug__metrics {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.sync-debug__metrics div {
+  background: #161a22;
+  border: 1px solid #2d3442;
+  padding: 12px;
+}
+
+.sync-debug__metrics dt {
+  color: #8d97aa;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.sync-debug__metrics dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}

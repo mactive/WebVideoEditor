@@ -1,0 +1,25 @@
+{
+  "name": "@web-video-editor/media-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "wasm-pack build crate --target web --out-dir ../pkg --out-name media_wasm",
+    "build:node": "wasm-pack build crate --target nodejs --out-dir ../pkg-node --out-name media_wasm",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm build:node && vitest run --root ../.. packages/media-wasm/src/index.test.ts",
+    "test:wasm": "wasm-pack test --headless --chrome crate",
+    "bench": "node bench/run.mjs",
+    "bench:rust": "cargo bench --bench sdk"
+  },
+  "dependencies": {
+    "@web-video-editor/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

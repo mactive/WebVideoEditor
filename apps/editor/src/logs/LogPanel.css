@@ -1,0 +1,136 @@
+.log-panel {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px;
+  color: #e5e7eb;
+  background: #10141c;
+  border: 1px solid #2b3443;
+  border-radius: 10px;
+}
+
+.log-panel__header,
+.log-panel__actions,
+.log-panel__filters,
+.log-panel__entry-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-panel__header {
+  justify-content: space-between;
+}
+
+.log-panel__header h2,
+.log-panel__header p,
+.log-panel__status {
+  margin: 0;
+}
+
+.log-panel__header p,
+.log-panel__status {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.log-panel button,
+.log-panel input,
+.log-panel select {
+  padding: 7px 9px;
+  color: inherit;
+  background: #171e2a;
+  border: 1px solid #39465a;
+  border-radius: 6px;
+}
+
+.log-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.log-panel__filters {
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.log-panel__filters label {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+  color: #b7c2d0;
+  font-size: 12px;
+}
+
+.log-panel__filters label:last-child {
+  flex: 1;
+  min-width: 220px;
+}
+
+.log-panel__entries {
+  display: grid;
+  gap: 8px;
+  min-height: 180px;
+  max-height: 420px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.log-panel__entry {
+  padding: 9px;
+  background: #151b25;
+  border-left: 3px solid #64748b;
+  border-radius: 4px;
+}
+
+.log-panel__entry--info {
+  border-left-color: #38bdf8;
+}
+
+.log-panel__entry--warn {
+  border-left-color: #fbbf24;
+}
+
+.log-panel__entry--error {
+  border-left-color: #fb7185;
+}
+
+.log-panel__entry-summary {
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.log-panel__entry-summary time,
+.log-panel__entry-summary span {
+  color: #94a3b8;
+}
+
+.log-panel__entry pre,
+.log-panel__jsonl {
+  box-sizing: border-box;
+  width: 100%;
+  color: #cbd5e1;
+  background: #0b0f16;
+  border: 1px solid #263143;
+  border-radius: 4px;
+  font:
+    11px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.log-panel__entry pre {
+  max-height: 220px;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.log-panel__jsonl {
+  min-height: 72px;
+  padding: 8px;
+  resize: vertical;
+}

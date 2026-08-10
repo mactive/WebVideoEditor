@@ -1,0 +1,19 @@
+{
+  "name": "@web-video-editor/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "source:generate": "node ../../scripts/generate-doc-sources.mjs",
+    "dev": "pnpm source:generate && vitepress dev . --port 5174",
+    "build": "pnpm source:generate && vitepress build . && node ../../scripts/verify-docs.mjs --dist",
+    "preview": "vitepress preview . --port 4174",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0",
+    "mermaid": "11.16.1",
+    "vitepress": "1.6.4",
+    "vitepress-plugin-mermaid": "2.0.17"
+  }
+}

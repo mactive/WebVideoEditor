@@ -1,0 +1,213 @@
+"filename", "language", "YAML", "TypeScript", "JavaScript", "PostCSS", "TypeScript JSX", "TOML", "JSON", "JSON with Comments", "HTML", "Markdown", "Ignore", "Rust", "comment", "blank", "total"
+"/Users/bytedance/Documents/WebEditorSketch/.prettierignore", "Ignore", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 1, 12
+"/Users/bytedance/Documents/WebEditorSketch/.trae/specs/build-web-video-editor-learning-demo/checklist.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 91, 0, 0, 0, 23, 114
+"/Users/bytedance/Documents/WebEditorSketch/.trae/specs/build-web-video-editor-learning-demo/spec.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 237, 0, 0, 0, 112, 349
+"/Users/bytedance/Documents/WebEditorSketch/.trae/specs/build-web-video-editor-learning-demo/tasks.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 142, 0, 0, 0, 22, 164
+"/Users/bytedance/Documents/WebEditorSketch/Agent.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 322, 0, 0, 0, 92, 414
+"/Users/bytedance/Documents/WebEditorSketch/Cargo.lock", "TOML", 0, 0, 0, 0, 0, 363, 0, 0, 0, 0, 0, 0, 2, 48, 413
+"/Users/bytedance/Documents/WebEditorSketch/Cargo.toml", "TOML", 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 2, 9
+"/Users/bytedance/Documents/WebEditorSketch/README.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 0, 0, 0, 9, 35
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/@theme_index.js", "JavaScript", 0, 0, 250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 13, 276
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/_metadata.json", "JSON", 0, 0, 0, 0, 0, 0, 58, 0, 0, 0, 0, 0, 0, 0, 58
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/chunk-4NC3Y6OI.js", "JavaScript", 0, 0, 12946, 0, 0, 0, 0, 0, 0, 0, 0, 0, 256, 5, 13207
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/chunk-YCOVM2D4.js", "JavaScript", 0, 0, 9699, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 4, 9720
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/package.json", "JSON", 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 1, 4
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___@vue_devtools-api.js", "JavaScript", 0, 0, 4334, 0, 0, 0, 0, 0, 0, 0, 0, 0, 145, 5, 4484
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___@vueuse_core.js", "JavaScript", 0, 0, 582, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 584
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___@vueuse_integrations_useFocusTrap.js", "JavaScript", 0, 0, 1257, 0, 0, 0, 0, 0, 0, 0, 0, 0, 93, 4, 1354
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___mark__js_src_vanilla__js.js", "JavaScript", 0, 0, 882, 0, 0, 0, 0, 0, 0, 0, 0, 0, 781, 3, 1666
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___minisearch.js", "JavaScript", 0, 0, 1056, 0, 0, 0, 0, 0, 0, 0, 0, 0, 757, 1, 1814
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vue.js", "JavaScript", 0, 0, 346, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 348
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/config.ts", "TypeScript", 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 78
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/ecs-pixi.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 0, 0, 0, 11, 49
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/mobx.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 34, 0, 0, 0, 12, 46
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/overview.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 0, 0, 0, 14, 94
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/project-state.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 13, 60
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/capabilities.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 0, 0, 0, 24, 96
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/experiments/assets.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 0, 0, 0, 25, 105
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/guide/tour.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 16, 68
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/index.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 0, 0, 0, 26, 110
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/internals/binary.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 16, 58
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/internals/wasm.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 49, 0, 0, 0, 17, 66
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/observability/logging.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 14, 68
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/package.json", "JSON", 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 1, 20
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/av-sync.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 37, 0, 0, 0, 14, 51
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/export.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 48, 0, 0, 0, 13, 61
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/media.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 14, 61
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/proxy.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 13, 58
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/rxjs.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 49, 0, 0, 0, 15, 64
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/worker.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 48, 0, 0, 0, 11, 59
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/references/boundaries.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 11, 47
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/testing/verification.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 18, 70
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/troubleshooting.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 58, 0, 0, 0, 22, 80
+"/Users/bytedance/Documents/WebEditorSketch/apps/docs/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 1, 9
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/capabilities.spec.ts", "TypeScript", 0, 94, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 12, 107
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/manual/README.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 6, 19
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/manual/test2-performance.spec.ts", "TypeScript", 0, 269, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 281
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/preview.spec.ts", "TypeScript", 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 103
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/proxy.spec.ts", "TypeScript", 0, 158, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 169
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/sync.spec.ts", "TypeScript", 0, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 123
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task10.spec.ts", "TypeScript", 0, 187, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 206
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task11.spec.ts", "TypeScript", 0, 202, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 12, 215
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task12-core.spec.ts", "TypeScript", 0, 209, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 222
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task14-runtime.spec.ts", "TypeScript", 0, 360, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 376
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task17.spec.ts", "TypeScript", 0, 480, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 506
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task18-export.spec.ts", "TypeScript", 0, 390, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 409
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/index.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 1, 17
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/mobx.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 1, 17
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/package.json", "JSON", 0, 0, 0, 0, 0, 0, 33, 0, 0, 0, 0, 0, 0, 1, 34
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/preview.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 1, 17
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/App.tsx", "TypeScript JSX", 0, 0, 0, 0, 524, 0, 0, 0, 0, 0, 0, 0, 0, 26, 550
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/SyncDebugPanel.css", "PostCSS", 0, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 99
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/SyncDebugPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 478, 0, 0, 0, 0, 0, 0, 0, 0, 21, 499
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/main.tsx", "TypeScript JSX", 0, 0, 0, 0, 51, 0, 0, 0, 0, 0, 0, 0, 0, 7, 58
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/sync-video.worker.ts", "TypeScript", 0, 207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 10, 218
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/capabilities.test.ts", "TypeScript", 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 101
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/capabilities.ts", "TypeScript", 0, 470, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 502
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/editorInteraction.test.tsx", "TypeScript JSX", 0, 0, 0, 0, 137, 0, 0, 0, 0, 0, 0, 0, 1, 10, 148
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/ExportPanel.css", "PostCSS", 0, 0, 0, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21, 136
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/ExportPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 322, 0, 0, 0, 0, 0, 0, 0, 0, 21, 343
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-inspection.ts", "TypeScript", 0, 57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 63
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-opfs.ts", "TypeScript", 0, 44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 50
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-pipeline.test.ts", "TypeScript", 0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 45
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-pipeline.ts", "TypeScript", 0, 952, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 37, 989
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-types.ts", "TypeScript", 0, 103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 116
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export.worker.ts", "TypeScript", 0, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 5, 66
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/inspector/Inspector.css", "PostCSS", 0, 0, 0, 75, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 87
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/inspector/Inspector.tsx", "TypeScript JSX", 0, 0, 0, 0, 442, 0, 0, 0, 0, 0, 0, 0, 0, 14, 456
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/LogPanel.css", "PostCSS", 0, 0, 0, 117, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 137
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/LogPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 0, 17, 209
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/index.ts", "TypeScript", 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 12
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/logPanel.test.ts", "TypeScript", 0, 85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 98
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/logPanelModel.ts", "TypeScript", 0, 91, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 103
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/main.tsx", "TypeScript JSX", 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 5, 13
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/MediaPanel.css", "PostCSS", 0, 0, 0, 187, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 219
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/MediaPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 565, 0, 0, 0, 0, 0, 0, 0, 0, 20, 585
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/ProxyProgress.css", "PostCSS", 0, 0, 0, 83, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 98
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/ProxyProgress.tsx", "TypeScript JSX", 0, 0, 0, 0, 113, 0, 0, 0, 0, 0, 0, 0, 0, 8, 121
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/media.worker.ts", "TypeScript", 0, 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 30
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/ClipViewModel.test.ts", "TypeScript", 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 54
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/ClipViewModel.ts", "TypeScript", 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 89
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/MobxExperiment.css", "PostCSS", 0, 0, 0, 137, 0, 0, 0, 0, 0, 0, 0, 0, 0, 23, 160
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/MobxExperiment.tsx", "TypeScript JSX", 0, 0, 0, 0, 208, 0, 0, 0, 0, 0, 0, 0, 0, 9, 217
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/main.tsx", "TypeScript JSX", 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 4, 12
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/PreviewPanel.css", "PostCSS", 0, 0, 0, 162, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 190
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/PreviewPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 411, 0, 0, 0, 0, 0, 0, 0, 0, 21, 432
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/demoProject.ts", "TypeScript", 0, 125, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 127
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/main.tsx", "TypeScript JSX", 0, 0, 0, 0, 107, 0, 0, 0, 0, 0, 0, 0, 0, 7, 114
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/preview.worker.ts", "TypeScript", 0, 297, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 14, 312
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/commandController.ts", "TypeScript", 0, 87, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 100
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/index.ts", "TypeScript", 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 6
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/persistence.test.ts", "TypeScript", 0, 120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14, 134
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/persistence.ts", "TypeScript", 0, 155, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21, 176
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/projectSlice.ts", "TypeScript", 0, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 36
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/sessionSlice.ts", "TypeScript", 0, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 75
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/store.test.ts", "TypeScript", 0, 80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 90
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/store.ts", "TypeScript", 0, 26, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 30
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/styles.css", "PostCSS", 0, 0, 0, 508, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 605
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/Timeline.css", "PostCSS", 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 23, 171
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/Timeline.tsx", "TypeScript JSX", 0, 0, 0, 0, 323, 0, 0, 0, 0, 0, 0, 0, 0, 16, 339
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/timelineMath.test.ts", "TypeScript", 0, 61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 68
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/timelineMath.ts", "TypeScript", 0, 47, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 53
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/sync-debug.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 1, 17
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 1, 10
+"/Users/bytedance/Documents/WebEditorSketch/apps/editor/vite.config.ts", "TypeScript", 0, 172, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 23, 195
+"/Users/bytedance/Documents/WebEditorSketch/eslint.config.mjs", "JavaScript", 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 38
+"/Users/bytedance/Documents/WebEditorSketch/package.json", "JSON", 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 0, 0, 0, 1, 48
+"/Users/bytedance/Documents/WebEditorSketch/packages/config/package.json", "JSON", 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 1, 12
+"/Users/bytedance/Documents/WebEditorSketch/packages/config/tsconfig.base.json", "JSON", 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 1, 21
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/package.json", "JSON", 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 1, 20
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/command-bus.ts", "TypeScript", 0, 138, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 156
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/commands.test.ts", "TypeScript", 0, 458, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 29, 487
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/commands.ts", "TypeScript", 0, 241, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 259
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/document.test.ts", "TypeScript", 0, 122, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 140
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/index.ts", "TypeScript", 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 8
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/migrations.ts", "TypeScript", 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 74
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/project.ts", "TypeScript", 0, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 66
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/schema.ts", "TypeScript", 0, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 188
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/serialization.ts", "TypeScript", 0, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 77
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/test-fixture.ts", "TypeScript", 0, 95, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 97
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/src/validation.ts", "TypeScript", 0, 158, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 175
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 1, 8
+"/Users/bytedance/Documents/WebEditorSketch/packages/domain/vitest.config.ts", "TypeScript", 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 8
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/package.json", "JSON", 0, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 1, 25
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/audio-playback.test.ts", "TypeScript", 0, 187, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14, 201
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/audio-playback.ts", "TypeScript", 0, 422, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 26, 449
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/cli.ts", "TypeScript", 0, 167, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 180
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/index.ts", "TypeScript", 0, 18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 19
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/lifecycle.ts", "TypeScript", 0, 131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 151
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/media-probe-worker.ts", "TypeScript", 0, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 80
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/media-proxy-worker.ts", "TypeScript", 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 106
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-clock.test.ts", "TypeScript", 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 57
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-clock.ts", "TypeScript", 0, 117, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 132
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-sync.test.ts", "TypeScript", 0, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 70
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-sync.ts", "TypeScript", 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 80
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe-node.ts", "TypeScript", 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 58
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe-types.ts", "TypeScript", 0, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 127
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe.test.ts", "TypeScript", 0, 269, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 291
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe.ts", "TypeScript", 0, 609, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 642
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/protocol.ts", "TypeScript", 0, 258, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 23, 281
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-cache.test.ts", "TypeScript", 0, 164, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 181
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-cache.ts", "TypeScript", 0, 539, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 43, 582
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-pipeline.ts", "TypeScript", 0, 607, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 633
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-types.ts", "TypeScript", 0, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 164
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/runtime-metrics.test.ts", "TypeScript", 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 47
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/runtime-metrics.ts", "TypeScript", 0, 61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 67
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/scheduler.test.ts", "TypeScript", 0, 369, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 407
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/scheduler.ts", "TypeScript", 0, 878, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 66, 944
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/shared-memory.test.ts", "TypeScript", 0, 167, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 191
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/shared-memory.ts", "TypeScript", 0, 340, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 39, 379
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/transfer.ts", "TypeScript", 0, 73, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 81
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-client.test.ts", "TypeScript", 0, 409, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 43, 452
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-client.ts", "TypeScript", 0, 472, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 37, 509
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-host.test.ts", "TypeScript", 0, 187, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 209
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-host.ts", "TypeScript", 0, 291, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 25, 316
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-integration.test.ts", "TypeScript", 0, 144, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 159
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 1, 9
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/vitest.config.ts", "TypeScript", 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 8
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/bench/run.mjs", "JavaScript", 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 44
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/Cargo.toml", "TOML", 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 6, 22
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/benches/sdk.rs", "Rust", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 41, 0, 6, 47
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/src/lib.rs", "Rust", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 288, 0, 39, 327
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/tests/web.rs", "Rust", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 8, 48
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/package.json", "JSON", 0, 0, 0, 0, 0, 0, 25, 0, 0, 0, 0, 0, 0, 1, 26
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/src/index.test.ts", "TypeScript", 0, 145, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 163
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/src/index.ts", "TypeScript", 0, 339, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 365
+"/Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 1, 9
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/package.json", "JSON", 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 1, 18
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/dictionary.ts", "TypeScript", 0, 378, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 390
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/examples.ts", "TypeScript", 0, 137, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 141
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/index.ts", "TypeScript", 0, 58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 59
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/logger.ts", "TypeScript", 0, 163, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 185
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/observability.test.ts", "TypeScript", 0, 285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 37, 322
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/schema.ts", "TypeScript", 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 271
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/serialize.ts", "TypeScript", 0, 251, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 275
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/cli.ts", "TypeScript", 0, 37, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 44
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/console.ts", "TypeScript", 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 14
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/wasm.ts", "TypeScript", 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 33
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/worker.ts", "TypeScript", 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 58
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/src/types.ts", "TypeScript", 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 54
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 1, 9
+"/Users/bytedance/Documents/WebEditorSketch/packages/observability/vitest.config.ts", "TypeScript", 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 8
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/package.json", "JSON", 0, 0, 0, 0, 0, 0, 26, 0, 0, 0, 0, 0, 0, 1, 27
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/decoder.ts", "TypeScript", 0, 326, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 352
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/index.ts", "TypeScript", 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 8
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/pixi-renderer.ts", "TypeScript", 0, 208, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 220
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/preview-runtime.ts", "TypeScript", 0, 537, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 565
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/quality.ts", "TypeScript", 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 70
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/runtime-adapter.test.ts", "TypeScript", 0, 236, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 249
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/runtime-adapter.ts", "TypeScript", 0, 220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 235
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/systems.ts", "TypeScript", 0, 108, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14, 122
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/types.ts", "TypeScript", 0, 162, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 181
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 1, 9
+"/Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/vitest.config.ts", "TypeScript", 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 9
+"/Users/bytedance/Documents/WebEditorSketch/playwright.config.ts", "TypeScript", 0, 39, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 42
+"/Users/bytedance/Documents/WebEditorSketch/pnpm-lock.yaml", "YAML", 4161, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1184, 5345
+"/Users/bytedance/Documents/WebEditorSketch/pnpm-workspace.yaml", "YAML", 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 7
+"/Users/bytedance/Documents/WebEditorSketch/rust-toolchain.toml", "TOML", 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 5
+"/Users/bytedance/Documents/WebEditorSketch/scripts/generate-doc-sources.mjs", "JavaScript", 0, 0, 72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 80
+"/Users/bytedance/Documents/WebEditorSketch/scripts/verify-docs.mjs", "JavaScript", 0, 0, 633, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 31, 665
+"/Users/bytedance/Documents/WebEditorSketch/scripts/verify.mjs", "JavaScript", 0, 0, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 135
+"/Users/bytedance/Documents/WebEditorSketch/try.md", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 0, 846, 0, 0, 0, 300, 1146
+"/Users/bytedance/Documents/WebEditorSketch/vitest.config.ts", "TypeScript", 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 11
+"Total", "-", 4166, 19574, 32256, 1614, 3889, 390, 302, 56, 64, 2729, 11, 369, 2074, 4377, 71871

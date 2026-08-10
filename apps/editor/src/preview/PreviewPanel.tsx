@@ -1,0 +1,431 @@
+import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  MediabunnyAudioPlayback,
+  createMediabunnyDecoderQueueObservation,
+  type PlaybackMediaSource,
+} from "@web-video-editor/media-runtime";
+import {
+  ConsoleLogSink,
+  LogHub,
+  StructuredLogger,
+} from "@web-video-editor/observability";
+import {
+  PixiPreviewRenderer,
+  PreviewDecoderClient,
+  PreviewRuntime,
+  previewSourceMetadata,
+  resolveQualityProfile,
+  type PreviewRuntimeSnapshot,
+  type PreviewSource,
+} from "@web-video-editor/preview-runtime";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import type { ActionAvailability } from "../capabilities";
+import "./PreviewPanel.css";
+
+export type PreviewPanelProps = {
+  actionAvailability?: ActionAvailability;
+  audioSources?: ReadonlyMap<string, PlaybackMediaSource>;
+  embedded?: boolean;
+  logHub?: LogHub;
+  onPlayheadChange?: (playheadUs: number) => void;
+  playheadUs?: number;
+  project: ProjectDocument;
+  sources: readonly PreviewSource[];
+};
+
+type PreviewDiagnostics = {
+  dispose(): void;
+  getResources(): ReturnType<PreviewRuntime["resourceSnapshot"]>;
+  getSnapshot(): PreviewRuntimeSnapshot;
+  seek(playheadUs: number): void;
+};
+
+declare global {
+  interface Window {
+    __TASK_8_PREVIEW__?: PreviewDiagnostics;
+  }
+}
+
+function formatTime(timeUs: number): string {
+  return `${(timeUs / 1_000_000).toFixed(2)}s`;
+}
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function initialSnapshot(project: ProjectDocument): PreviewRuntimeSnapshot {
+  const profile = resolveQualityProfile(project, "preview");
+  return {
+    buffering: false,
+    durationUs: Math.max(
+      0,
+      ...project.clips.map(
+        (clip) => clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs,
+      ),
+    ),
+    metrics: {
+      activeResources: 0,
+      audioActiveSources: 0,
+      audioGeneration: 0,
+      avDriftUs: 0,
+      cacheHitRate: 0,
+      clockSource: "performance",
+      clockTransportMode: "message",
+      codecQueues: {
+        audioDecoder: null,
+        videoDecoder: createMediabunnyDecoderQueueObservation("VideoDecoder"),
+      },
+      decodeQueue: 0,
+      droppedFrames: 0,
+      fps: 0,
+      frameTimestampErrorUs: 0,
+      height: profile.height,
+      playheadUs: 0,
+      presentedPlayheadUs: 0,
+      presentedFrames: 0,
+      resyncs: 0,
+      staleFrames: 0,
+      timestampDrops: 0,
+      width: profile.width,
+    },
+    playing: false,
+    ready: false,
+  };
+}
+
+export function PreviewPanel({
+  actionAvailability,
+  audioSources,
+  embedded = false,
+  logHub: providedLogHub,
+  onPlayheadChange,
+  playheadUs,
+  project,
+  sources,
+}: PreviewPanelProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const runtimeRef = useRef<PreviewRuntime | undefined>(undefined);
+  const projectRef = useRef(project);
+  const playheadRef = useRef(playheadUs);
+  const onPlayheadChangeRef = useRef(onPlayheadChange);
+  const fallbackLogHub = useMemo(() => new LogHub([new ConsoleLogSink()]), []);
+  const [snapshot, setSnapshot] = useState(() => initialSnapshot(project));
+  const [activeVideoFrames, setActiveVideoFrames] = useState(0);
+  const previewEnabled = actionAvailability?.enabled === true;
+  const sourceKey = sources
+    .map((source) => {
+      const metadata = previewSourceMetadata(source);
+      return `${source.assetId}:${metadata.cacheKey}:${source.mediaUrl ?? "opfs"}`;
+    })
+    .join("|");
+  const audioSourceKey = [...(audioSources?.entries() ?? [])]
+    .map(([assetId, source]) =>
+      source.kind === "opfs-proxy"
+        ? `${assetId}:${source.kind}:${source.cacheKey}`
+        : source.kind === "url"
+          ? `${assetId}:${source.kind}:${source.url}`
+          : `${assetId}:${source.kind}:${source.blob.size}`,
+    )
+    .join("|");
+
+  useEffect(() => {
+    projectRef.current = project;
+    playheadRef.current = playheadUs;
+    onPlayheadChangeRef.current = onPlayheadChange;
+  }, [onPlayheadChange, playheadUs, project]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !previewEnabled || sources.length === 0) {
+      setSnapshot(initialSnapshot(projectRef.current));
+      host?.replaceChildren();
+      return;
+    }
+    let disposed = false;
+    let unsubscribe: () => void = () => undefined;
+    let renderer: PixiPreviewRenderer | undefined;
+    let decoder: PreviewDecoderClient | undefined;
+    let audio: MediabunnyAudioPlayback | undefined;
+    let runtime: PreviewRuntime | undefined;
+    const logHub = providedLogHub ?? fallbackLogHub;
+    const logger = new StructuredLogger(logHub, "preview-panel");
+    const currentProject = projectRef.current;
+    const profile = resolveQualityProfile(currentProject, "preview");
+
+    void (async () => {
+      renderer = new PixiPreviewRenderer({
+        backgroundColor: currentProject.canvas.backgroundColor,
+        logger,
+        profile,
+      });
+      await renderer.init(host);
+      if (disposed) {
+        renderer.destroy();
+        return;
+      }
+      decoder = new PreviewDecoderClient(
+        () =>
+          new Worker(new URL("./preview.worker.ts", import.meta.url), {
+            name: "preview-decoder-worker",
+            type: "module",
+          }),
+        logger,
+        undefined,
+        logHub,
+      );
+      audio =
+        audioSources && audioSources.size > 0
+          ? new MediabunnyAudioPlayback({
+              logger,
+              sources: audioSources,
+            })
+          : undefined;
+      runtime = new PreviewRuntime({
+        audio,
+        decoder,
+        logger,
+        project: currentProject,
+        renderer,
+        sources,
+      });
+      runtimeRef.current = runtime;
+      if (playheadRef.current !== undefined) {
+        runtime.seek(playheadRef.current);
+      }
+      const update = () => {
+        if (!runtime) {
+          return;
+        }
+        const next = runtime.getSnapshot();
+        setSnapshot(next);
+        setActiveVideoFrames(
+          runtime.resourceSnapshot().byType["video-frame"].active,
+        );
+        onPlayheadChangeRef.current?.(next.metrics.playheadUs);
+      };
+      unsubscribe = runtime.subscribe(update);
+      window.__TASK_8_PREVIEW__ = {
+        dispose: () => runtime?.dispose(),
+        getResources: () => runtime!.resourceSnapshot(),
+        getSnapshot: () => runtime!.getSnapshot(),
+        seek: (nextPlayheadUs) => runtime?.seek(nextPlayheadUs),
+      };
+      update();
+    })().catch((error: unknown) => {
+      setSnapshot((current) => ({
+        ...current,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+      runtimeRef.current = undefined;
+      delete window.__TASK_8_PREVIEW__;
+      if (runtime) {
+        runtime.dispose();
+      } else {
+        decoder?.dispose();
+        void audio?.dispose();
+        renderer?.destroy();
+      }
+    };
+  }, [
+    audioSourceKey,
+    fallbackLogHub,
+    providedLogHub,
+    sourceKey,
+    sources,
+    audioSources,
+    previewEnabled,
+  ]);
+
+  useEffect(() => {
+    runtimeRef.current?.setProject(project);
+  }, [project]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (
+      runtime &&
+      playheadUs !== undefined &&
+      Math.abs(runtime.getSnapshot().metrics.playheadUs - playheadUs) > 1
+    ) {
+      runtime.seek(playheadUs);
+    }
+  }, [playheadUs]);
+
+  const runtime = runtimeRef.current;
+  const effects = project.clips.flatMap((clip) => clip.effects);
+  const videoDecodeQueue =
+    snapshot.metrics.codecQueues.videoDecoder.applicationQueue;
+
+  return (
+    <section
+      className={`preview-panel${embedded ? " preview-panel--embedded" : ""}`}
+      data-active-resources={snapshot.metrics.activeResources}
+      data-active-video-frames={activeVideoFrames}
+      data-decode-active={videoDecodeQueue.active}
+      data-decode-backpressure={videoDecodeQueue.backpressureCount}
+      data-decode-hwm={videoDecodeQueue.highWatermark}
+      data-decode-queued={videoDecodeQueue.queued}
+      data-presented-frames={snapshot.metrics.presentedFrames}
+      data-ready={snapshot.ready}
+      aria-labelledby="preview-panel-title"
+    >
+      {!embedded ? (
+        <div className="preview-panel__heading">
+          <div>
+            <p className="eyebrow">PREVIEW RUNTIME · TASK 08</p>
+            <h1 id="preview-panel-title">低分辨率真实代理预览</h1>
+            <p>
+              Miniplex ECS → PixiJS v8 Scene Graph；Worker 从 OPFS
+              代理按关键帧解码 VideoFrame。
+            </p>
+          </div>
+          <a href="/">返回能力与素材页</a>
+        </div>
+      ) : (
+        <h2 className="preview-panel__embedded-title" id="preview-panel-title">
+          实时预览
+        </h2>
+      )}
+
+      <div className="preview-panel__workspace">
+        <div className="preview-panel__stage">
+          <div
+            className="preview-panel__canvas"
+            data-testid="pixi-preview-host"
+            ref={hostRef}
+          />
+          {!actionAvailability ? (
+            <span className="preview-panel__loading">正在检测预览能力…</span>
+          ) : !actionAvailability.enabled ? (
+            <p className="preview-panel__error" role="alert">
+              预览已禁用：{actionAvailability.reason}
+            </p>
+          ) : sources.length === 0 ? (
+            <span className="preview-panel__loading">
+              导入素材并添加到时间线
+            </span>
+          ) : !snapshot.ready ? (
+            <span className="preview-panel__loading">初始化 PixiJS…</span>
+          ) : null}
+          {snapshot.error ? (
+            <p className="preview-panel__error" role="alert">
+              {snapshot.error}
+            </p>
+          ) : null}
+        </div>
+
+        {!embedded ? (
+          <aside className="preview-panel__effects">
+            <span>ACTIVE EFFECTS</span>
+            {effects.length === 0 ? (
+              <strong>无滤镜</strong>
+            ) : (
+              effects.map((effect) => (
+                <strong key={effect.id}>{effect.kind}</strong>
+              ))
+            )}
+            <small>效果参数与 export quality profile 共用同一语义。</small>
+          </aside>
+        ) : null}
+      </div>
+
+      <div className="preview-panel__controls">
+        <button
+          disabled={!previewEnabled || !snapshot.ready}
+          onClick={() =>
+            snapshot.playing ? runtime?.pause() : runtime?.play()
+          }
+          type="button"
+        >
+          {snapshot.playing ? "暂停" : "播放"}
+        </button>
+        <button
+          disabled={!previewEnabled || !snapshot.ready}
+          onClick={() => runtime?.step(-1)}
+          type="button"
+        >
+          上一帧
+        </button>
+        <button
+          disabled={!previewEnabled || !snapshot.ready}
+          onClick={() => runtime?.step(1)}
+          type="button"
+        >
+          下一帧
+        </button>
+        <span>{formatTime(snapshot.metrics.playheadUs)}</span>
+        <input
+          aria-label="预览播放头"
+          disabled={!previewEnabled || !snapshot.ready}
+          max={snapshot.durationUs}
+          min={0}
+          onChange={(event) => {
+            const nextPlayhead = Number(event.currentTarget.value);
+            runtime?.seek(nextPlayhead);
+            onPlayheadChangeRef.current?.(nextPlayhead);
+          }}
+          step={1}
+          type="range"
+          value={snapshot.metrics.playheadUs}
+        />
+        <span>{formatTime(snapshot.durationUs)}</span>
+      </div>
+
+      <dl className="preview-panel__metrics" aria-label="预览指标">
+        <div>
+          <dt>预览分辨率</dt>
+          <dd data-testid="proxy-resolution">
+            {snapshot.metrics.width}×{snapshot.metrics.height}
+          </dd>
+        </div>
+        <div>
+          <dt>FPS</dt>
+          <dd data-testid="preview-fps">{snapshot.metrics.fps}</dd>
+        </div>
+        <div>
+          <dt>应用解码队列 / 内部队列</dt>
+          <dd data-testid="decode-queue">
+            {videoDecodeQueue.active}/{videoDecodeQueue.queued} · HWM{" "}
+            {videoDecodeQueue.highWatermark} / N/A
+          </dd>
+        </div>
+        <div>
+          <dt>Cache Hit</dt>
+          <dd>{percent(snapshot.metrics.cacheHitRate)}</dd>
+        </div>
+        <div>
+          <dt>丢帧 / 过期</dt>
+          <dd data-testid="dropped-frames">
+            {snapshot.metrics.droppedFrames} / {snapshot.metrics.staleFrames}
+          </dd>
+        </div>
+        <div>
+          <dt>活跃资源 / VideoFrame</dt>
+          <dd data-testid="active-resources">
+            {snapshot.metrics.activeResources} / {activeVideoFrames}
+          </dd>
+        </div>
+        <div>
+          <dt>时钟 / A/V drift</dt>
+          <dd data-testid="av-drift">
+            {snapshot.metrics.clockSource} /{" "}
+            {(snapshot.metrics.avDriftUs / 1_000).toFixed(1)}ms
+          </dd>
+        </div>
+        <div>
+          <dt>Timestamp drop / Resync</dt>
+          <dd data-testid="sync-drops">
+            {snapshot.metrics.timestampDrops} / {snapshot.metrics.resyncs}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}

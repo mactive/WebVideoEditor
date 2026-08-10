@@ -1,0 +1,97 @@
+.proxy-progress {
+  margin-top: 16px;
+  padding: 14px;
+  background: #0b0f15;
+  border: 1px solid #293140;
+  border-radius: 7px;
+}
+
+.proxy-progress__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #aeb9ca;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.proxy-progress__header span {
+  color: #8494ff;
+}
+
+.proxy-progress__track {
+  display: block;
+  height: 4px;
+  margin: 12px 0;
+  overflow: hidden;
+  background: #202733;
+  border-radius: 99px;
+}
+
+.proxy-progress__track span {
+  display: block;
+  height: 100%;
+  background: #8494ff;
+  transition: width 120ms linear;
+}
+
+.proxy-progress dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.proxy-progress dl div {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 8px;
+}
+
+.proxy-progress dt,
+.proxy-progress dd {
+  margin: 0;
+  font-size: 10px;
+}
+
+.proxy-progress dt {
+  color: #596476;
+}
+
+.proxy-progress dd {
+  overflow-wrap: anywhere;
+  color: #aab4c3;
+}
+
+.proxy-progress button {
+  margin-top: 12px;
+  padding: 7px 10px;
+  color: #ffc6ad;
+  background: transparent;
+  border: 1px solid #754b43;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.proxy-progress__error {
+  color: #ffc6ad;
+  font-size: 11px;
+}
+
+.proxy-progress[data-status="ready"] .proxy-progress__track span {
+  background: #5bd6a2;
+}
+
+.proxy-progress[data-status="failed"] .proxy-progress__track span,
+.proxy-progress[data-status="cancelled"] .proxy-progress__track span {
+  background: #e98272;
+}
+
+@media (max-width: 760px) {
+  .proxy-progress dl {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,159 @@
+.mobx-page {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 52px 0;
+}
+
+.mobx-page__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 26px;
+}
+
+.mobx-page__header h1 {
+  font-size: clamp(34px, 5vw, 56px);
+}
+
+.mobx-page__header p:last-child {
+  max-width: 700px;
+  color: #939dac;
+  line-height: 1.7;
+}
+
+.mobx-page__header a {
+  color: #9da9ff;
+  text-decoration: none;
+}
+
+.mobx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.mobx-card {
+  padding: 20px;
+  background: #11161f;
+  border: 1px solid #2c3543;
+  border-radius: 12px;
+}
+
+.mobx-card header {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.mobx-card header span {
+  color: #8494ff;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.mobx-stage {
+  display: grid;
+  min-height: 220px;
+  overflow: hidden;
+  place-items: center;
+  background: #090c11;
+  border: 1px solid #27303d;
+  border-radius: 8px;
+}
+
+.mobx-stage div {
+  padding: 22px 30px;
+  color: #11141a;
+  background: #9ba8ff;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mobx-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mobx-fields label {
+  display: grid;
+  grid-template-columns: 100px 50px 1fr;
+  align-items: center;
+  color: #a0aaba;
+  font-size: 11px;
+}
+
+.mobx-fields input {
+  width: 100%;
+  accent-color: #8494ff;
+}
+
+.mobx-counters {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.mobx-counters div {
+  display: block;
+  padding: 12px;
+  background: #0d1118;
+  border: 1px solid #28313e;
+  border-radius: 6px;
+}
+
+.mobx-counters dt {
+  margin-bottom: 6px;
+}
+
+.mobx-counters dd {
+  color: #e4e8f0;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 18px;
+}
+
+.mobx-card pre {
+  min-height: 220px;
+  margin: 0;
+  padding: 18px;
+  overflow: auto;
+  color: #cbd2ff;
+  background: #090c11;
+  border: 1px solid #27303d;
+  border-radius: 8px;
+  font:
+    12px/1.7 "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.mobx-card button {
+  margin-top: 16px;
+  padding: 9px 12px;
+  color: #f0f2ff;
+  background: #3c4898;
+  border: 1px solid #6878dd;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mobx-card > p {
+  color: #7f8999;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .mobx-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobx-page__header {
+    align-items: start;
+    flex-direction: column;
+  }
+}

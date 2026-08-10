@@ -1,0 +1,47 @@
+{
+  "name": "web-video-editor-learning-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": "22.17.0",
+    "pnpm": "10.13.1"
+  },
+  "scripts": {
+    "dev:editor": "pnpm --filter @web-video-editor/editor dev",
+    "dev:docs": "pnpm --filter @web-video-editor/docs dev",
+    "docs:check": "node scripts/verify-docs.mjs",
+    "media:probe": "tsx packages/media-runtime/src/cli.ts",
+    "build": "pnpm build:wasm && pnpm --filter './apps/*' run build",
+    "build:wasm": "pnpm --filter @web-video-editor/media-wasm build",
+    "build:wasm:node": "pnpm --filter @web-video-editor/media-wasm build:node",
+    "bench:wasm": "pnpm build:wasm:node && cargo bench --bench sdk && pnpm --filter @web-video-editor/media-wasm bench",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm build:wasm:node && vitest run",
+    "test:rust": "cargo test --workspace",
+    "test:wasm": "pnpm --filter @web-video-editor/media-wasm test:wasm",
+    "test:e2e": "pnpm test:e2e:core",
+    "test:e2e:core": "playwright test apps/editor/e2e/task12-core.spec.ts",
+    "test:e2e:extended": "playwright test --grep-invert @manual",
+    "test:e2e:test2": "playwright test apps/editor/e2e/manual/test2-performance.spec.ts --workers=1",
+    "verify:wasm": "cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && pnpm test:rust && pnpm test && pnpm build:wasm && pnpm test:wasm",
+    "verify": "node scripts/verify.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.2.0",
+    "eslint": "10.8.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.3",
+    "prettier": "3.9.6",
+    "tsx": "4.23.11",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.66.0",
+    "vitest": "4.1.10"
+  }
+}

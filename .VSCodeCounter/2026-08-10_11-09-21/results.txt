@@ -1,0 +1,307 @@
+Date : 2026-08-10 11:09:21
+Directory : /Users/bytedance/Documents/WebEditorSketch
+Total : 211 files,  65420 codes, 2074 comments, 4377 blanks, all 71871 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| JavaScript         |         14 |     32,256 |      2,065 |         94 |     34,415 |
+| TypeScript         |        112 |     19,574 |          6 |      1,587 |     21,167 |
+| YAML               |          2 |      4,166 |          0 |      1,186 |      5,352 |
+| TypeScript JSX     |         15 |      3,889 |          1 |        206 |      4,096 |
+| Markdown           |         27 |      2,729 |          0 |        883 |      3,612 |
+| PostCSS            |         10 |      1,614 |          0 |        288 |      1,902 |
+| TOML               |          4 |        390 |          2 |         57 |        449 |
+| Rust               |          3 |        369 |          0 |         53 |        422 |
+| JSON               |         12 |        302 |          0 |         11 |        313 |
+| HTML               |          4 |         64 |          0 |          4 |         68 |
+| JSON with Comments |          7 |         56 |          0 |          7 |         63 |
+| Ignore             |          1 |         11 |          0 |          1 |         12 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                                        | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                                           |        211 |     65,420 |      2,074 |      4,377 |     71,871 |
+| . (Files)                                                                                                                   |         13 |      5,876 |          2 |      1,647 |      7,525 |
+| .trae                                                                                                                       |          3 |        470 |          0 |        157 |        627 |
+| .trae/specs                                                                                                                 |          3 |        470 |          0 |        157 |        627 |
+| .trae/specs/build-web-video-editor-learning-demo                                                                            |          3 |        470 |          0 |        157 |        627 |
+| apps                                                                                                                        |        105 |     44,385 |      2,070 |      1,322 |     47,777 |
+| apps/docs                                                                                                                   |         34 |     32,568 |      2,064 |        361 |     34,993 |
+| apps/docs (Files)                                                                                                           |          5 |        241 |          0 |         74 |        315 |
+| apps/docs/.vitepress                                                                                                        |         12 |     31,489 |      2,064 |         40 |     33,593 |
+| apps/docs/.vitepress (Files)                                                                                                |          1 |         76 |          0 |          2 |         78 |
+| apps/docs/.vitepress/cache                                                                                                  |         11 |     31,413 |      2,064 |         38 |     33,515 |
+| apps/docs/.vitepress/cache/deps                                                                                             |         11 |     31,413 |      2,064 |         38 |     33,515 |
+| apps/docs/architecture                                                                                                      |          4 |        199 |          0 |         50 |        249 |
+| apps/docs/experiments                                                                                                       |          1 |         80 |          0 |         25 |        105 |
+| apps/docs/guide                                                                                                             |          1 |         52 |          0 |         16 |         68 |
+| apps/docs/internals                                                                                                         |          2 |         91 |          0 |         33 |        124 |
+| apps/docs/observability                                                                                                     |          1 |         54 |          0 |         14 |         68 |
+| apps/docs/pipeline                                                                                                          |          6 |        274 |          0 |         80 |        354 |
+| apps/docs/references                                                                                                        |          1 |         36 |          0 |         11 |         47 |
+| apps/docs/testing                                                                                                           |          1 |         52 |          0 |         18 |         70 |
+| apps/editor                                                                                                                 |         71 |     11,817 |          6 |        961 |     12,784 |
+| apps/editor (Files)                                                                                                         |          7 |        278 |          0 |         29 |        307 |
+| apps/editor/e2e                                                                                                             |         12 |      2,570 |          2 |        164 |      2,736 |
+| apps/editor/e2e (Files)                                                                                                     |         10 |      2,288 |          2 |        146 |      2,436 |
+| apps/editor/e2e/manual                                                                                                      |          2 |        282 |          0 |         18 |        300 |
+| apps/editor/src                                                                                                             |         52 |      8,969 |          4 |        768 |      9,741 |
+| apps/editor/src (Files)                                                                                                     |          6 |      1,739 |          1 |        179 |      1,919 |
+| apps/editor/src/audio                                                                                                       |          4 |        818 |          1 |         55 |        874 |
+| apps/editor/src/export                                                                                                      |          8 |      1,693 |          1 |        114 |      1,808 |
+| apps/editor/src/inspector                                                                                                   |          2 |        517 |          0 |         26 |        543 |
+| apps/editor/src/logs                                                                                                        |          5 |        496 |          0 |         63 |        559 |
+| apps/editor/src/media                                                                                                       |          5 |        975 |          0 |         78 |      1,053 |
+| apps/editor/src/mobx                                                                                                        |          5 |        477 |          0 |         55 |        532 |
+| apps/editor/src/preview                                                                                                     |          5 |      1,102 |          1 |         72 |      1,175 |
+| apps/editor/src/store                                                                                                       |          8 |        573 |          0 |         74 |        647 |
+| apps/editor/src/timeline                                                                                                    |          4 |        579 |          0 |         52 |        631 |
+| packages                                                                                                                    |         87 |     13,857 |          1 |      1,204 |     15,062 |
+| packages/config                                                                                                             |          2 |         31 |          0 |          2 |         33 |
+| packages/domain                                                                                                             |         14 |      1,620 |          0 |        143 |      1,763 |
+| packages/domain (Files)                                                                                                     |          3 |         32 |          0 |          4 |         36 |
+| packages/domain/src                                                                                                         |         11 |      1,588 |          0 |        139 |      1,727 |
+| packages/media-runtime                                                                                                      |         35 |      7,632 |          1 |        654 |      8,287 |
+| packages/media-runtime (Files)                                                                                              |          3 |         38 |          0 |          4 |         42 |
+| packages/media-runtime/src                                                                                                  |         32 |      7,594 |          1 |        650 |      8,245 |
+| packages/media-wasm                                                                                                         |          9 |        938 |          0 |        113 |      1,051 |
+| packages/media-wasm (Files)                                                                                                 |          2 |         33 |          0 |          2 |         35 |
+| packages/media-wasm/bench                                                                                                   |          1 |         36 |          0 |          8 |         44 |
+| packages/media-wasm/crate                                                                                                   |          4 |        385 |          0 |         59 |        444 |
+| packages/media-wasm/crate (Files)                                                                                           |          1 |         16 |          0 |          6 |         22 |
+| packages/media-wasm/crate/benches                                                                                           |          1 |         41 |          0 |          6 |         47 |
+| packages/media-wasm/crate/src                                                                                               |          1 |        288 |          0 |         39 |        327 |
+| packages/media-wasm/crate/tests                                                                                             |          1 |         40 |          0 |          8 |         48 |
+| packages/media-wasm/src                                                                                                     |          2 |        484 |          0 |         44 |        528 |
+| packages/observability                                                                                                      |         15 |      1,726 |          0 |        155 |      1,881 |
+| packages/observability (Files)                                                                                              |          3 |         31 |          0 |          4 |         35 |
+| packages/observability/src                                                                                                  |         12 |      1,695 |          0 |        151 |      1,846 |
+| packages/observability/src (Files)                                                                                          |          8 |      1,572 |          0 |        125 |      1,697 |
+| packages/observability/src/sinks                                                                                            |          4 |        123 |          0 |         26 |        149 |
+| packages/preview-runtime                                                                                                    |         12 |      1,910 |          0 |        137 |      2,047 |
+| packages/preview-runtime (Files)                                                                                            |          3 |         41 |          0 |          4 |         45 |
+| packages/preview-runtime/src                                                                                                |          9 |      1,869 |          0 |        133 |      2,002 |
+| scripts                                                                                                                     |          3 |        832 |          1 |         47 |        880 |
++-----------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                                                                    | language           | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| /Users/bytedance/Documents/WebEditorSketch/.prettierignore                                                                  | Ignore             |         11 |          0 |          1 |         12 |
+| /Users/bytedance/Documents/WebEditorSketch/.trae/specs/build-web-video-editor-learning-demo/checklist.md                    | Markdown           |         91 |          0 |         23 |        114 |
+| /Users/bytedance/Documents/WebEditorSketch/.trae/specs/build-web-video-editor-learning-demo/spec.md                         | Markdown           |        237 |          0 |        112 |        349 |
+| /Users/bytedance/Documents/WebEditorSketch/.trae/specs/build-web-video-editor-learning-demo/tasks.md                        | Markdown           |        142 |          0 |         22 |        164 |
+| /Users/bytedance/Documents/WebEditorSketch/Agent.md                                                                         | Markdown           |        322 |          0 |         92 |        414 |
+| /Users/bytedance/Documents/WebEditorSketch/Cargo.lock                                                                       | TOML               |        363 |          2 |         48 |        413 |
+| /Users/bytedance/Documents/WebEditorSketch/Cargo.toml                                                                       | TOML               |          7 |          0 |          2 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/README.md                                                                        | Markdown           |         26 |          0 |          9 |         35 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/@theme_index.js                                  | JavaScript         |        250 |         13 |         13 |        276 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/_metadata.json                                   | JSON               |         58 |          0 |          0 |         58 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/chunk-4NC3Y6OI.js                                | JavaScript         |     12,946 |        256 |          5 |     13,207 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/chunk-YCOVM2D4.js                                | JavaScript         |      9,699 |         17 |          4 |      9,720 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/package.json                                     | JSON               |          3 |          0 |          1 |          4 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___@vue_devtools-api.js                 | JavaScript         |      4,334 |        145 |          5 |      4,484 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___@vueuse_core.js                      | JavaScript         |        582 |          1 |          1 |        584 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___@vueuse_integrations_useFocusTrap.js | JavaScript         |      1,257 |         93 |          4 |      1,354 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___mark__js_src_vanilla__js.js          | JavaScript         |        882 |        781 |          3 |      1,666 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vitepress___minisearch.js                        | JavaScript         |      1,056 |        757 |          1 |      1,814 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/cache/deps/vue.js                                           | JavaScript         |        346 |          1 |          1 |        348 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/.vitepress/config.ts                                                   | TypeScript         |         76 |          0 |          2 |         78 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/ecs-pixi.md                                               | Markdown           |         38 |          0 |         11 |         49 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/mobx.md                                                   | Markdown           |         34 |          0 |         12 |         46 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/overview.md                                               | Markdown           |         80 |          0 |         14 |         94 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/architecture/project-state.md                                          | Markdown           |         47 |          0 |         13 |         60 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/capabilities.md                                                        | Markdown           |         72 |          0 |         24 |         96 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/experiments/assets.md                                                  | Markdown           |         80 |          0 |         25 |        105 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/guide/tour.md                                                          | Markdown           |         52 |          0 |         16 |         68 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/index.md                                                               | Markdown           |         84 |          0 |         26 |        110 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/internals/binary.md                                                    | Markdown           |         42 |          0 |         16 |         58 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/internals/wasm.md                                                      | Markdown           |         49 |          0 |         17 |         66 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/observability/logging.md                                               | Markdown           |         54 |          0 |         14 |         68 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/package.json                                                           | JSON               |         19 |          0 |          1 |         20 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/av-sync.md                                                    | Markdown           |         37 |          0 |         14 |         51 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/export.md                                                     | Markdown           |         48 |          0 |         13 |         61 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/media.md                                                      | Markdown           |         47 |          0 |         14 |         61 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/proxy.md                                                      | Markdown           |         45 |          0 |         13 |         58 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/rxjs.md                                                       | Markdown           |         49 |          0 |         15 |         64 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/pipeline/worker.md                                                     | Markdown           |         48 |          0 |         11 |         59 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/references/boundaries.md                                               | Markdown           |         36 |          0 |         11 |         47 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/testing/verification.md                                                | Markdown           |         52 |          0 |         18 |         70 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/troubleshooting.md                                                     | Markdown           |         58 |          0 |         22 |         80 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/docs/tsconfig.json                                                          | JSON with Comments |          8 |          0 |          1 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/capabilities.spec.ts                                             | TypeScript         |         94 |          1 |         12 |        107 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/manual/README.md                                                 | Markdown           |         13 |          0 |          6 |         19 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/manual/test2-performance.spec.ts                                 | TypeScript         |        269 |          0 |         12 |        281 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/preview.spec.ts                                                  | TypeScript         |         96 |          0 |          7 |        103 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/proxy.spec.ts                                                    | TypeScript         |        158 |          0 |         11 |        169 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/sync.spec.ts                                                     | TypeScript         |        112 |          0 |         11 |        123 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task10.spec.ts                                                   | TypeScript         |        187 |          0 |         19 |        206 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task11.spec.ts                                                   | TypeScript         |        202 |          1 |         12 |        215 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task12-core.spec.ts                                              | TypeScript         |        209 |          0 |         13 |        222 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task14-runtime.spec.ts                                           | TypeScript         |        360 |          0 |         16 |        376 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task17.spec.ts                                                   | TypeScript         |        480 |          0 |         26 |        506 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/e2e/task18-export.spec.ts                                            | TypeScript         |        390 |          0 |         19 |        409 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/index.html                                                           | HTML               |         16 |          0 |          1 |         17 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/mobx.html                                                            | HTML               |         16 |          0 |          1 |         17 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/package.json                                                         | JSON               |         33 |          0 |          1 |         34 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/preview.html                                                         | HTML               |         16 |          0 |          1 |         17 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/App.tsx                                                          | TypeScript JSX     |        524 |          0 |         26 |        550 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/SyncDebugPanel.css                                         | PostCSS            |         82 |          0 |         17 |         99 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/SyncDebugPanel.tsx                                         | TypeScript JSX     |        478 |          0 |         21 |        499 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/main.tsx                                                   | TypeScript JSX     |         51 |          0 |          7 |         58 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/audio/sync-video.worker.ts                                       | TypeScript         |        207 |          1 |         10 |        218 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/capabilities.test.ts                                             | TypeScript         |         92 |          0 |          9 |        101 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/capabilities.ts                                                  | TypeScript         |        470 |          0 |         32 |        502 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/editorInteraction.test.tsx                                       | TypeScript JSX     |        137 |          1 |         10 |        148 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/ExportPanel.css                                           | PostCSS            |        115 |          0 |         21 |        136 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/ExportPanel.tsx                                           | TypeScript JSX     |        322 |          0 |         21 |        343 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-inspection.ts                                      | TypeScript         |         57 |          0 |          6 |         63 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-opfs.ts                                            | TypeScript         |         44 |          0 |          6 |         50 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-pipeline.test.ts                                   | TypeScript         |         40 |          0 |          5 |         45 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-pipeline.ts                                        | TypeScript         |        952 |          0 |         37 |        989 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export-types.ts                                           | TypeScript         |        103 |          0 |         13 |        116 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/export/export.worker.ts                                          | TypeScript         |         60 |          1 |          5 |         66 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/inspector/Inspector.css                                          | PostCSS            |         75 |          0 |         12 |         87 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/inspector/Inspector.tsx                                          | TypeScript JSX     |        442 |          0 |         14 |        456 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/LogPanel.css                                                | PostCSS            |        117 |          0 |         20 |        137 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/LogPanel.tsx                                                | TypeScript JSX     |        192 |          0 |         17 |        209 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/index.ts                                                    | TypeScript         |         11 |          0 |          1 |         12 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/logPanel.test.ts                                            | TypeScript         |         85 |          0 |         13 |         98 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/logs/logPanelModel.ts                                            | TypeScript         |         91 |          0 |         12 |        103 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/main.tsx                                                         | TypeScript JSX     |          8 |          0 |          5 |         13 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/MediaPanel.css                                             | PostCSS            |        187 |          0 |         32 |        219 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/MediaPanel.tsx                                             | TypeScript JSX     |        565 |          0 |         20 |        585 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/ProxyProgress.css                                          | PostCSS            |         83 |          0 |         15 |         98 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/ProxyProgress.tsx                                          | TypeScript JSX     |        113 |          0 |          8 |        121 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/media/media.worker.ts                                            | TypeScript         |         27 |          0 |          3 |         30 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/ClipViewModel.test.ts                                       | TypeScript         |         48 |          0 |          6 |         54 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/ClipViewModel.ts                                            | TypeScript         |         76 |          0 |         13 |         89 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/MobxExperiment.css                                          | PostCSS            |        137 |          0 |         23 |        160 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/MobxExperiment.tsx                                          | TypeScript JSX     |        208 |          0 |          9 |        217 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/mobx/main.tsx                                                    | TypeScript JSX     |          8 |          0 |          4 |         12 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/PreviewPanel.css                                         | PostCSS            |        162 |          0 |         28 |        190 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/PreviewPanel.tsx                                         | TypeScript JSX     |        411 |          0 |         21 |        432 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/demoProject.ts                                           | TypeScript         |        125 |          0 |          2 |        127 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/main.tsx                                                 | TypeScript JSX     |        107 |          0 |          7 |        114 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/preview/preview.worker.ts                                        | TypeScript         |        297 |          1 |         14 |        312 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/commandController.ts                                       | TypeScript         |         87 |          0 |         13 |        100 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/index.ts                                                   | TypeScript         |          5 |          0 |          1 |          6 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/persistence.test.ts                                        | TypeScript         |        120 |          0 |         14 |        134 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/persistence.ts                                             | TypeScript         |        155 |          0 |         21 |        176 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/projectSlice.ts                                            | TypeScript         |         31 |          0 |          5 |         36 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/sessionSlice.ts                                            | TypeScript         |         69 |          0 |          6 |         75 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/store.test.ts                                              | TypeScript         |         80 |          0 |         10 |         90 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/store/store.ts                                                   | TypeScript         |         26 |          0 |          4 |         30 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/styles.css                                                       | PostCSS            |        508 |          0 |         97 |        605 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/Timeline.css                                            | PostCSS            |        148 |          0 |         23 |        171 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/Timeline.tsx                                            | TypeScript JSX     |        323 |          0 |         16 |        339 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/timelineMath.test.ts                                    | TypeScript         |         61 |          0 |          7 |         68 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/src/timeline/timelineMath.ts                                         | TypeScript         |         47 |          0 |          6 |         53 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/sync-debug.html                                                      | HTML               |         16 |          0 |          1 |         17 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/tsconfig.json                                                        | JSON with Comments |          9 |          0 |          1 |         10 |
+| /Users/bytedance/Documents/WebEditorSketch/apps/editor/vite.config.ts                                                       | TypeScript         |        172 |          0 |         23 |        195 |
+| /Users/bytedance/Documents/WebEditorSketch/eslint.config.mjs                                                                | JavaScript         |         36 |          0 |          2 |         38 |
+| /Users/bytedance/Documents/WebEditorSketch/package.json                                                                     | JSON               |         47 |          0 |          1 |         48 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/config/package.json                                                     | JSON               |         11 |          0 |          1 |         12 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/config/tsconfig.base.json                                               | JSON               |         20 |          0 |          1 |         21 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/package.json                                                     | JSON               |         19 |          0 |          1 |         20 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/command-bus.ts                                               | TypeScript         |        138 |          0 |         18 |        156 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/commands.test.ts                                             | TypeScript         |        458 |          0 |         29 |        487 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/commands.ts                                                  | TypeScript         |        241 |          0 |         18 |        259 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/document.test.ts                                             | TypeScript         |        122 |          0 |         18 |        140 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/index.ts                                                     | TypeScript         |          7 |          0 |          1 |          8 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/migrations.ts                                                | TypeScript         |         64 |          0 |         10 |         74 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/project.ts                                                   | TypeScript         |         63 |          0 |          3 |         66 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/schema.ts                                                    | TypeScript         |        173 |          0 |         15 |        188 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/serialization.ts                                             | TypeScript         |         69 |          0 |          8 |         77 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/test-fixture.ts                                              | TypeScript         |         95 |          0 |          2 |         97 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/src/validation.ts                                                | TypeScript         |        158 |          0 |         17 |        175 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/tsconfig.json                                                    | JSON with Comments |          7 |          0 |          1 |          8 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/domain/vitest.config.ts                                                 | TypeScript         |          6 |          0 |          2 |          8 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/package.json                                              | JSON               |         24 |          0 |          1 |         25 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/audio-playback.test.ts                                | TypeScript         |        187 |          0 |         14 |        201 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/audio-playback.ts                                     | TypeScript         |        422 |          1 |         26 |        449 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/cli.ts                                                | TypeScript         |        167 |          0 |         13 |        180 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/index.ts                                              | TypeScript         |         18 |          0 |          1 |         19 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/lifecycle.ts                                          | TypeScript         |        131 |          0 |         20 |        151 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/media-probe-worker.ts                                 | TypeScript         |         69 |          0 |         11 |         80 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/media-proxy-worker.ts                                 | TypeScript         |        100 |          0 |          6 |        106 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-clock.test.ts                                | TypeScript         |         49 |          0 |          8 |         57 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-clock.ts                                     | TypeScript         |        117 |          0 |         15 |        132 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-sync.test.ts                                 | TypeScript         |         63 |          0 |          7 |         70 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/playback-sync.ts                                      | TypeScript         |         76 |          0 |          4 |         80 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe-node.ts                                         | TypeScript         |         52 |          0 |          6 |         58 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe-types.ts                                        | TypeScript         |        116 |          0 |         11 |        127 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe.test.ts                                         | TypeScript         |        269 |          0 |         22 |        291 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/probe.ts                                              | TypeScript         |        609 |          0 |         33 |        642 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/protocol.ts                                           | TypeScript         |        258 |          0 |         23 |        281 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-cache.test.ts                                   | TypeScript         |        164 |          0 |         17 |        181 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-cache.ts                                        | TypeScript         |        539 |          0 |         43 |        582 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-pipeline.ts                                     | TypeScript         |        607 |          0 |         26 |        633 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/proxy-types.ts                                        | TypeScript         |        148 |          0 |         16 |        164 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/runtime-metrics.test.ts                               | TypeScript         |         42 |          0 |          5 |         47 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/runtime-metrics.ts                                    | TypeScript         |         61 |          0 |          6 |         67 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/scheduler.test.ts                                     | TypeScript         |        369 |          0 |         38 |        407 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/scheduler.ts                                          | TypeScript         |        878 |          0 |         66 |        944 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/shared-memory.test.ts                                 | TypeScript         |        167 |          0 |         24 |        191 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/shared-memory.ts                                      | TypeScript         |        340 |          0 |         39 |        379 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/transfer.ts                                           | TypeScript         |         73 |          0 |          8 |         81 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-client.test.ts                                 | TypeScript         |        409 |          0 |         43 |        452 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-client.ts                                      | TypeScript         |        472 |          0 |         37 |        509 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-host.test.ts                                   | TypeScript         |        187 |          0 |         22 |        209 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-host.ts                                        | TypeScript         |        291 |          0 |         25 |        316 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/src/worker-integration.test.ts                            | TypeScript         |        144 |          0 |         15 |        159 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/tsconfig.json                                             | JSON with Comments |          8 |          0 |          1 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-runtime/vitest.config.ts                                          | TypeScript         |          6 |          0 |          2 |          8 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/bench/run.mjs                                                | JavaScript         |         36 |          0 |          8 |         44 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/Cargo.toml                                             | TOML               |         16 |          0 |          6 |         22 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/benches/sdk.rs                                         | Rust               |         41 |          0 |          6 |         47 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/src/lib.rs                                             | Rust               |        288 |          0 |         39 |        327 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/crate/tests/web.rs                                           | Rust               |         40 |          0 |          8 |         48 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/package.json                                                 | JSON               |         25 |          0 |          1 |         26 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/src/index.test.ts                                            | TypeScript         |        145 |          0 |         18 |        163 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/src/index.ts                                                 | TypeScript         |        339 |          0 |         26 |        365 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/media-wasm/tsconfig.json                                                | JSON with Comments |          8 |          0 |          1 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/package.json                                              | JSON               |         17 |          0 |          1 |         18 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/dictionary.ts                                         | TypeScript         |        378 |          0 |         12 |        390 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/examples.ts                                           | TypeScript         |        137 |          0 |          4 |        141 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/index.ts                                              | TypeScript         |         58 |          0 |          1 |         59 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/logger.ts                                             | TypeScript         |        163 |          0 |         22 |        185 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/observability.test.ts                                 | TypeScript         |        285 |          0 |         37 |        322 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/schema.ts                                             | TypeScript         |        255 |          0 |         16 |        271 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/serialize.ts                                          | TypeScript         |        251 |          0 |         24 |        275 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/cli.ts                                          | TypeScript         |         37 |          0 |          7 |         44 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/console.ts                                      | TypeScript         |         10 |          0 |          4 |         14 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/wasm.ts                                         | TypeScript         |         28 |          0 |          5 |         33 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/sinks/worker.ts                                       | TypeScript         |         48 |          0 |         10 |         58 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/src/types.ts                                              | TypeScript         |         45 |          0 |          9 |         54 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/tsconfig.json                                             | JSON with Comments |          8 |          0 |          1 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/observability/vitest.config.ts                                          | TypeScript         |          6 |          0 |          2 |          8 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/package.json                                            | JSON               |         26 |          0 |          1 |         27 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/decoder.ts                                          | TypeScript         |        326 |          0 |         26 |        352 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/index.ts                                            | TypeScript         |          7 |          0 |          1 |          8 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/pixi-renderer.ts                                    | TypeScript         |        208 |          0 |         12 |        220 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/preview-runtime.ts                                  | TypeScript         |        537 |          0 |         28 |        565 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/quality.ts                                          | TypeScript         |         65 |          0 |          5 |         70 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/runtime-adapter.test.ts                             | TypeScript         |        236 |          0 |         13 |        249 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/runtime-adapter.ts                                  | TypeScript         |        220 |          0 |         15 |        235 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/systems.ts                                          | TypeScript         |        108 |          0 |         14 |        122 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/src/types.ts                                            | TypeScript         |        162 |          0 |         19 |        181 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/tsconfig.json                                           | JSON with Comments |          8 |          0 |          1 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/packages/preview-runtime/vitest.config.ts                                        | TypeScript         |          7 |          0 |          2 |          9 |
+| /Users/bytedance/Documents/WebEditorSketch/playwright.config.ts                                                             | TypeScript         |         39 |          0 |          3 |         42 |
+| /Users/bytedance/Documents/WebEditorSketch/pnpm-lock.yaml                                                                   | YAML               |      4,161 |          0 |      1,184 |      5,345 |
+| /Users/bytedance/Documents/WebEditorSketch/pnpm-workspace.yaml                                                              | YAML               |          5 |          0 |          2 |          7 |
+| /Users/bytedance/Documents/WebEditorSketch/rust-toolchain.toml                                                              | TOML               |          4 |          0 |          1 |          5 |
+| /Users/bytedance/Documents/WebEditorSketch/scripts/generate-doc-sources.mjs                                                 | JavaScript         |         72 |          0 |          8 |         80 |
+| /Users/bytedance/Documents/WebEditorSketch/scripts/verify-docs.mjs                                                          | JavaScript         |        633 |          1 |         31 |        665 |
+| /Users/bytedance/Documents/WebEditorSketch/scripts/verify.mjs                                                               | JavaScript         |        127 |          0 |          8 |        135 |
+| /Users/bytedance/Documents/WebEditorSketch/try.md                                                                           | Markdown           |        846 |          0 |        300 |      1,146 |
+| /Users/bytedance/Documents/WebEditorSketch/vitest.config.ts                                                                 | TypeScript         |          9 |          0 |          2 |         11 |
+| Total                                                                                                                       |                    |     65,420 |      2,074 |      4,377 |     71,871 |
++-----------------------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

@@ -1,0 +1,86 @@
+.inspector {
+  min-width: 0;
+  padding: 16px;
+  overflow: auto;
+  background: #11151d;
+  border: 1px solid #2b3341;
+  border-radius: 10px;
+}
+
+.inspector__heading {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #29313e;
+}
+
+.inspector__heading span {
+  color: #7c8799;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.inspector__heading strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector__empty {
+  color: #758093;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.inspector fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid #2c3544;
+  border-radius: 7px;
+}
+
+.inspector legend {
+  padding: 0 5px;
+  color: #aab4ff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.inspector label {
+  display: grid;
+  gap: 5px;
+  color: #98a3b4;
+  font-size: 10px;
+}
+
+.inspector input,
+.inspector select,
+.inspector textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 7px;
+  color: #e4e8ef;
+  background: #0d1118;
+  border: 1px solid #364154;
+  border-radius: 5px;
+  font: inherit;
+}
+
+.inspector input[type="range"] {
+  padding: 0;
+  accent-color: #8494ff;
+}
+
+.inspector input[type="color"] {
+  height: 34px;
+  padding: 3px;
+}
+
+.inspector textarea {
+  min-height: 64px;
+  resize: vertical;
+}

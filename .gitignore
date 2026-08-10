@@ -1,0 +1,13 @@
+node_modules/
+dist/
+target/
+packages/media-wasm/pkg/
+packages/media-wasm/pkg-node/
+coverage/
+playwright-report/
+test-results/
+.vitepress/cache/
+.vitepress/dist/
+apps/docs/public/source/
+*.tsbuildinfo
+*.mp4

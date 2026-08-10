@@ -1,0 +1,33 @@
+{
+  "name": "@web-video-editor/editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "2.12.0",
+    "@vitejs/plugin-react": "6.0.5",
+    "@web-video-editor/domain": "workspace:*",
+    "@web-video-editor/media-runtime": "workspace:*",
+    "@web-video-editor/observability": "workspace:*",
+    "@web-video-editor/preview-runtime": "workspace:*",
+    "mediabunny": "1.53.0",
+    "mobx": "^6.16.1",
+    "mobx-react-lite": "^4.1.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.2.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "^26.1.0"
+  }
+}

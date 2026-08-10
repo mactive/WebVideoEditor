@@ -1,0 +1,11 @@
+.trae/
+test_assets/
+node_modules/
+dist/
+**/.vitepress/cache/
+apps/docs/public/source/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+try.md

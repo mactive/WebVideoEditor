@@ -1,0 +1,135 @@
+.export-panel {
+  margin-top: 10px;
+  padding: 15px;
+  background: #11151d;
+  border: 1px solid #2b3341;
+  border-radius: 10px;
+}
+
+.export-panel__heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.export-panel__heading .eyebrow {
+  margin-bottom: 5px;
+}
+
+.export-panel__heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.export-panel__heading p:last-child {
+  margin: 6px 0 0;
+  color: #7f899a;
+  font-size: 10px;
+}
+
+.export-panel__heading strong {
+  padding: 6px 8px;
+  color: #68dca9;
+  background: #11231d;
+  border: 1px solid #285a47;
+  border-radius: 4px;
+  font:
+    10px "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.export-panel__settings {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.export-panel__settings div {
+  display: block;
+  padding: 8px;
+  background: #0d1118;
+  border-radius: 5px;
+}
+
+.export-panel__settings dt {
+  margin-bottom: 4px;
+}
+
+.export-panel__progress {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(6, auto);
+  align-items: center;
+  gap: 10px;
+  margin-top: 11px;
+  color: #9ca7b7;
+  font:
+    10px "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.export-panel__progress progress {
+  width: 100%;
+  accent-color: #8290f5;
+}
+
+.export-panel__error,
+.export-panel__diagnosis,
+.export-panel__result {
+  margin: 10px 0 0;
+  font-size: 11px;
+}
+
+.export-panel__error {
+  color: #ffac91;
+}
+
+.export-panel__diagnosis {
+  color: #d4aa73;
+}
+
+.export-panel__result {
+  color: #68dca9;
+}
+
+.export-panel__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.export-panel__actions button,
+.export-panel__actions a {
+  padding: 7px 11px;
+  color: #e4e8ef;
+  background: #20283a;
+  border: 1px solid #465270;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.export-panel__actions button:disabled {
+  color: #697180;
+  background: #151922;
+  border-color: #2c3340;
+  cursor: not-allowed;
+}
+
+@media (max-width: 780px) {
+  .export-panel__settings {
+    grid-template-columns: 1fr;
+  }
+
+  .export-panel__progress {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .export-panel__progress progress {
+    grid-column: 1 / -1;
+  }
+}
