@@ -116,6 +116,7 @@ export type LogQuery = {
 
 export class LogHub implements LogSink {
   private entries: readonly LogEntry[] = [];
+  private enabled = true;
   private readonly listeners = new Set<LogListener>();
   private readonly sinks = new Set<LogSink>();
 
@@ -141,6 +142,18 @@ export class LogHub implements LogSink {
     this.notify();
   }
 
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) {
+      return;
+    }
+    this.enabled = enabled;
+    this.notify();
+  }
+
   getEntries(): readonly LogEntry[] {
     return this.entries;
   }
@@ -163,6 +176,9 @@ export class LogHub implements LogSink {
   }
 
   write(candidate: LogEntry): void {
+    if (!this.enabled) {
+      return;
+    }
     const entry = parseLogEntry(candidate);
     this.entries = [...this.entries, entry].slice(-this.capacity);
     for (const sink of this.sinks) {

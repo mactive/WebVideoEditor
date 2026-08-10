@@ -22,6 +22,7 @@ import type {
 
 type DecodeJob = {
   generation: number;
+  origin: "playback" | "seek";
   playheadUs: number;
   projectRevision: number;
   requestId: string;
@@ -66,6 +67,8 @@ export class PreviewRuntime {
   private seekSubscription?: Subscription;
   private animationFrame?: number;
   private lastPlaybackFrame = -1;
+  private playbackDecodeInFlight = false;
+  private pendingPlaybackTimeUs?: number;
   private requestCounter = 0;
   private transportGeneration = 0;
   private syncDroppedFrames = 0;
@@ -170,6 +173,8 @@ export class PreviewRuntime {
       Math.min(Math.round(playheadUs), this.snapshot.durationUs),
     );
     this.transportGeneration += 1;
+    this.playbackDecodeInFlight = false;
+    this.pendingPlaybackTimeUs = undefined;
     this.stopAnimation();
     this.options.audio?.stop("seek-or-revision");
     this.clock.seek(clamped, this.project.revision);
@@ -196,6 +201,8 @@ export class PreviewRuntime {
       return;
     }
     this.transportGeneration += 1;
+    this.playbackDecodeInFlight = false;
+    this.pendingPlaybackTimeUs = undefined;
     const playheadUs =
       this.clock.snapshot().state === "running"
         ? Math.min(this.clock.currentTimeUs(), this.snapshot.durationUs)
@@ -323,12 +330,15 @@ export class PreviewRuntime {
         },
       },
     };
-    this.requestFrame(playheadUs);
+    this.requestPlaybackFrame(playheadUs);
     this.notify();
     this.animationFrame = requestAnimationFrame(this.tick);
   }
 
-  private requestFrame(playheadUs: number): void {
+  private requestFrame(
+    playheadUs: number,
+    origin: DecodeJob["origin"] = "seek",
+  ): void {
     if (this.disposed) {
       return;
     }
@@ -370,12 +380,24 @@ export class PreviewRuntime {
     }
     this.jobs.next({
       generation: this.clock.snapshot().generation,
+      origin,
       playheadUs: clamped,
       projectRevision: this.project.revision,
       requestId,
       source,
       sourceTimeUs: evaluation.video.sourceTimeUs,
     });
+  }
+
+  private requestPlaybackFrame(playheadUs: number): void {
+    this.pendingPlaybackTimeUs = playheadUs;
+    if (this.playbackDecodeInFlight || !this.snapshot.playing) {
+      return;
+    }
+    const nextPlayheadUs = this.pendingPlaybackTimeUs;
+    this.pendingPlaybackTimeUs = undefined;
+    this.playbackDecodeInFlight = true;
+    this.requestFrame(nextPlayheadUs, "playback");
   }
 
   private readonly tick = () => {
@@ -393,7 +415,7 @@ export class PreviewRuntime {
     const frame = Math.floor((nextUs * frameRate) / 1_000_000);
     if (frame !== this.lastPlaybackFrame) {
       this.lastPlaybackFrame = frame;
-      this.requestFrame(nextUs);
+      this.requestPlaybackFrame(nextUs);
     }
     this.animationFrame = requestAnimationFrame(this.tick);
   };
@@ -419,11 +441,17 @@ export class PreviewRuntime {
         .then((decoded) => ({ decoded, job })),
     ).subscribe({
       error: (error: unknown) => {
+        this.playbackDecodeInFlight = false;
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           this.setError(error);
         }
         if (!this.disposed) {
           this.connectSeekStream();
+          if (this.snapshot.playing) {
+            this.requestPlaybackFrame(
+              Math.min(this.clock.currentTimeUs(), this.snapshot.durationUs),
+            );
+          }
         }
       },
       next: ({ decoded, job }) => this.present(decoded, job),
@@ -521,7 +549,19 @@ export class PreviewRuntime {
       decoded.release();
       this.refreshDecoderMetrics();
       this.notify();
-      if (resyncTimeUs !== undefined && !this.disposed) {
+      if (job.origin === "playback") {
+        this.playbackDecodeInFlight = false;
+        if (this.snapshot.playing && !this.disposed) {
+          const latestClockUs = Math.min(
+            this.clock.currentTimeUs(),
+            this.snapshot.durationUs,
+          );
+          this.requestPlaybackFrame(
+            resyncTimeUs ??
+              Math.max(this.pendingPlaybackTimeUs ?? 0, latestClockUs),
+          );
+        }
+      } else if (resyncTimeUs !== undefined && !this.disposed) {
         this.requestFrame(resyncTimeUs);
       }
     }

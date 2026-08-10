@@ -14,6 +14,7 @@ import {
 import {
   StructuredLogger,
   WorkerLogSink,
+  type LogSink,
   type WorkerMessageTarget,
 } from "@web-video-editor/observability";
 import {
@@ -33,10 +34,16 @@ type ProxyDecoder = {
 
 const endpoint = self as unknown as DedicatedWorkerGlobalScope &
   WorkerMessageTarget;
-const logger = new StructuredLogger(
-  new WorkerLogSink(endpoint),
-  "preview-decoder-worker",
-);
+let diagnosticLogsEnabled = true;
+const workerLogSink = new WorkerLogSink(endpoint);
+const gatedLogSink: LogSink = {
+  write(entry) {
+    if (diagnosticLogsEnabled) {
+      workerLogSink.write(entry);
+    }
+  },
+};
+const logger = new StructuredLogger(gatedLogSink, "preview-decoder-worker");
 const decoders = new Map<string, Promise<ProxyDecoder>>();
 const cancelled = new Set<string>();
 const decodeTasks = new Map<string, DecoderQueueTaskHandle<void>>();
@@ -47,6 +54,7 @@ const decoderQueue = new MediabunnyDecoderQueueAdapter("VideoDecoder", {
   overflowPolicy: "replace-oldest",
 });
 let latestRequestId = "";
+const DIRECT_SOURCE_LOOKBACK_US = 2_000_000;
 
 function post(message: PreviewDecodeResponse, transfer: Transferable[] = []) {
   endpoint.postMessage(message, transfer);
@@ -61,6 +69,9 @@ function queueFields() {
 }
 
 function nearestKeyframeUs(request: PreviewDecodeRequest): number {
+  if (request.keyframes.length === 0) {
+    return Math.max(0, request.sourceTimeUs - DIRECT_SOURCE_LOOKBACK_US);
+  }
   let timestampUs = 0;
   for (const keyframe of request.keyframes) {
     const candidateUs = Math.round(keyframe.timestampSec * 1_000_000);
@@ -142,26 +153,28 @@ async function decode(
 ): Promise<void> {
   const startedAt = performance.now();
   const decodeFromUs = nearestKeyframeUs(request);
-  logger.log({
-    event: "request",
-    input: {
-      decodeFromUs,
-      sourceTimeUs: request.sourceTimeUs,
-    },
-    level: "debug",
-    marker: "[SEEK]",
-    projectRevision: request.projectRevision,
-    requestId: request.requestId,
-  });
-  logger.log({
-    event: "packet",
-    input: { keyframeTimestampUs: decodeFromUs },
-    level: "debug",
-    marker: "[DEMUX]",
-    output: { cacheKey: request.cacheKey },
-    projectRevision: request.projectRevision,
-    requestId: request.requestId,
-  });
+  if (request.diagnosticLogs) {
+    logger.log({
+      event: "request",
+      input: {
+        decodeFromUs,
+        sourceTimeUs: request.sourceTimeUs,
+      },
+      level: "debug",
+      marker: "[SEEK]",
+      projectRevision: request.projectRevision,
+      requestId: request.requestId,
+    });
+    logger.log({
+      event: "packet",
+      input: { keyframeTimestampUs: decodeFromUs },
+      level: "debug",
+      marker: "[DEMUX]",
+      output: { cacheKey: request.cacheKey },
+      projectRevision: request.projectRevision,
+      requestId: request.requestId,
+    });
+  }
 
   try {
     const { track } = await decoderFor(request.cacheKey, request.mediaUrl);
@@ -175,15 +188,17 @@ async function decode(
         type: "preview.dropped",
         version: PREVIEW_DECODE_PROTOCOL_VERSION,
       });
-      logger.log({
-        event: "frame.dropped",
-        input: { sourceTimeUs: request.sourceTimeUs },
-        level: "debug",
-        marker: "[DECODE]",
-        output: { reason: "superseded" },
-        projectRevision: request.projectRevision,
-        requestId: request.requestId,
-      });
+      if (request.diagnosticLogs) {
+        logger.log({
+          event: "frame.dropped",
+          input: { sourceTimeUs: request.sourceTimeUs },
+          level: "debug",
+          marker: "[DECODE]",
+          output: { reason: "superseded" },
+          projectRevision: request.projectRevision,
+          requestId: request.requestId,
+        });
+      }
       return;
     }
 
@@ -218,20 +233,22 @@ async function decode(
       },
       [frame],
     );
-    logger.log({
-      durationMs: performance.now() - startedAt,
-      event: "frame",
-      input: { decodeFromUs, sourceTimeUs: request.sourceTimeUs },
-      level: "debug",
-      marker: "[DECODE]",
-      output: {
-        ...queueFields(),
-        height: frameHeight,
-        width: frameWidth,
-      },
-      projectRevision: request.projectRevision,
-      requestId: request.requestId,
-    });
+    if (request.diagnosticLogs) {
+      logger.log({
+        durationMs: performance.now() - startedAt,
+        event: "frame",
+        input: { decodeFromUs, sourceTimeUs: request.sourceTimeUs },
+        level: "debug",
+        marker: "[DECODE]",
+        output: {
+          ...queueFields(),
+          height: frameHeight,
+          width: frameWidth,
+        },
+        projectRevision: request.projectRevision,
+        requestId: request.requestId,
+      });
+    }
   } catch (error) {
     post({
       ...queueFields(),
@@ -241,18 +258,20 @@ async function decode(
       type: "preview.error",
       version: PREVIEW_DECODE_PROTOCOL_VERSION,
     });
-    logger.log({
-      error,
-      event: "failed",
-      input: {
-        cacheKey: request.cacheKey,
-        sourceTimeUs: request.sourceTimeUs,
-      },
-      level: "error",
-      marker: "[DECODE]",
-      projectRevision: request.projectRevision,
-      requestId: request.requestId,
-    });
+    if (request.diagnosticLogs) {
+      logger.log({
+        error,
+        event: "failed",
+        input: {
+          cacheKey: request.cacheKey,
+          sourceTimeUs: request.sourceTimeUs,
+        },
+        level: "error",
+        marker: "[DECODE]",
+        projectRevision: request.projectRevision,
+        requestId: request.requestId,
+      });
+    }
   } finally {
     cancelled.delete(request.requestId);
   }
@@ -275,6 +294,7 @@ endpoint.addEventListener(
         ?.cancel(request.reason ?? "Preview decode cancelled");
       return;
     }
+    diagnosticLogsEnabled = request.diagnosticLogs;
     latestRequestId = request.requestId;
     const task = decoderQueue.schedule(request.requestId, (signal) =>
       decode(request, signal),

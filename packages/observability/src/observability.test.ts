@@ -313,6 +313,29 @@ describe("sinks and request tracing", () => {
     expect(hub.getEntries()).toHaveLength(0);
   });
 
+  it("drops writes while the hub is disabled", () => {
+    const sink = { write: vi.fn() };
+    const hub = new LogHub([sink]);
+    const entry = createLogEntry({
+      event: "request",
+      level: "debug",
+      marker: "[SEEK]",
+      requestId: "seek_01",
+      scope: "scheduler",
+      timestamp: "2026-08-09T12:00:00.000Z",
+    });
+
+    hub.setEnabled(false);
+    hub.write(entry);
+    expect(hub.getEntries()).toHaveLength(0);
+    expect(sink.write).not.toHaveBeenCalled();
+
+    hub.setEnabled(true);
+    hub.write(entry);
+    expect(hub.getEntries()).toEqual([entry]);
+    expect(sink.write).toHaveBeenCalledWith(entry);
+  });
+
   it("generates schema-safe request IDs", () => {
     expect(createRequestId("seek")).toMatch(
       /^seek_[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/,

@@ -18,6 +18,7 @@ export const PREVIEW_DECODE_PROTOCOL_VERSION = 1 as const;
 
 export type PreviewDecodeRequest = {
   cacheKey: string;
+  diagnosticLogs: boolean;
   generation: number;
   keyframes: PreviewSource["keyframes"];
   frameRate: number;
@@ -229,6 +230,7 @@ export class PreviewDecoderClient {
     private readonly logger?: StructuredLogger,
     lifecycle?: ResourceLifecycleTracker,
     private readonly workerLogSink?: LogSink,
+    private readonly diagnosticLogs: boolean | (() => boolean) = true,
   ) {
     this.lifecycle = lifecycle ?? new ResourceLifecycleTracker();
     this.worker = workerFactory();
@@ -279,6 +281,7 @@ export class PreviewDecoderClient {
       this.pending.set(requestId, pending);
       this.worker.postMessage({
         cacheKey: metadata.cacheKey,
+        diagnosticLogs: this.diagnosticLogsEnabled(),
         frameRate: metadata.frameRate,
         generation,
         keyframes: source.keyframes,
@@ -347,5 +350,11 @@ export class PreviewDecoderClient {
     for (const listener of this.statsListeners) {
       listener();
     }
+  }
+
+  private diagnosticLogsEnabled(): boolean {
+    return typeof this.diagnosticLogs === "function"
+      ? this.diagnosticLogs()
+      : this.diagnosticLogs;
   }
 }

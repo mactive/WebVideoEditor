@@ -2,7 +2,11 @@ import type { ProjectDocument } from "@web-video-editor/domain";
 import {
   MediabunnyAudioPlayback,
   createMediabunnyDecoderQueueObservation,
+  sampleJsHeapMetrics,
+  sampleStorageEstimate,
+  type JsHeapMetrics,
   type PlaybackMediaSource,
+  type StorageEstimateMetrics,
 } from "@web-video-editor/media-runtime";
 import {
   ConsoleLogSink,
@@ -26,6 +30,7 @@ import "./PreviewPanel.css";
 export type PreviewPanelProps = {
   actionAvailability?: ActionAvailability;
   audioSources?: ReadonlyMap<string, PlaybackMediaSource>;
+  diagnosticsLoggingEnabled?: boolean;
   embedded?: boolean;
   logHub?: LogHub;
   onPlayheadChange?: (playheadUs: number) => void;
@@ -41,6 +46,12 @@ type PreviewDiagnostics = {
   seek(playheadUs: number): void;
 };
 
+type RuntimeDashboardSample = {
+  heap: JsHeapMetrics;
+  sampledAtMs: number;
+  storage: StorageEstimateMetrics;
+};
+
 declare global {
   interface Window {
     __TASK_8_PREVIEW__?: PreviewDiagnostics;
@@ -53,6 +64,19 @@ function formatTime(timeUs: number): string {
 
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
+}
+
+function formatBytes(bytes: number | undefined): string {
+  if (bytes === undefined) {
+    return "N/A";
+  }
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+  }
+  return `${Math.ceil(bytes / 1024)} KiB`;
 }
 
 function initialSnapshot(project: ProjectDocument): PreviewRuntimeSnapshot {
@@ -98,6 +122,7 @@ function initialSnapshot(project: ProjectDocument): PreviewRuntimeSnapshot {
 export function PreviewPanel({
   actionAvailability,
   audioSources,
+  diagnosticsLoggingEnabled = true,
   embedded = false,
   logHub: providedLogHub,
   onPlayheadChange,
@@ -109,10 +134,18 @@ export function PreviewPanel({
   const runtimeRef = useRef<PreviewRuntime | undefined>(undefined);
   const projectRef = useRef(project);
   const playheadRef = useRef(playheadUs);
+  const diagnosticsLoggingEnabledRef = useRef(diagnosticsLoggingEnabled);
   const onPlayheadChangeRef = useRef(onPlayheadChange);
   const fallbackLogHub = useMemo(() => new LogHub([new ConsoleLogSink()]), []);
   const [snapshot, setSnapshot] = useState(() => initialSnapshot(project));
   const [activeVideoFrames, setActiveVideoFrames] = useState(0);
+  const [runtimeMetrics, setRuntimeMetrics] = useState<RuntimeDashboardSample>(
+    () => ({
+      heap: sampleJsHeapMetrics(),
+      sampledAtMs: performance.now(),
+      storage: { available: false },
+    }),
+  );
   const previewEnabled = actionAvailability?.enabled === true;
   const sourceKey = sources
     .map((source) => {
@@ -133,8 +166,31 @@ export function PreviewPanel({
   useEffect(() => {
     projectRef.current = project;
     playheadRef.current = playheadUs;
+    diagnosticsLoggingEnabledRef.current = diagnosticsLoggingEnabled;
     onPlayheadChangeRef.current = onPlayheadChange;
-  }, [onPlayheadChange, playheadUs, project]);
+  }, [diagnosticsLoggingEnabled, onPlayheadChange, playheadUs, project]);
+
+  useEffect(() => {
+    let active = true;
+    const sample = () => {
+      const heap = sampleJsHeapMetrics();
+      void sampleStorageEstimate().then((storage) => {
+        if (active) {
+          setRuntimeMetrics({
+            heap,
+            sampledAtMs: performance.now(),
+            storage,
+          });
+        }
+      });
+    };
+    sample();
+    const interval = window.setInterval(sample, 1_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -174,6 +230,7 @@ export function PreviewPanel({
         logger,
         undefined,
         logHub,
+        () => diagnosticsLoggingEnabledRef.current,
       );
       audio =
         audioSources && audioSources.size > 0
@@ -262,6 +319,10 @@ export function PreviewPanel({
   const effects = project.clips.flatMap((clip) => clip.effects);
   const videoDecodeQueue =
     snapshot.metrics.codecQueues.videoDecoder.applicationQueue;
+  const audioDecodeQueue =
+    snapshot.metrics.codecQueues.audioDecoder?.applicationQueue;
+  const heapLimit =
+    runtimeMetrics.heap.jsHeapSizeLimit ?? runtimeMetrics.heap.totalJSHeapSize;
 
   return (
     <section
@@ -274,6 +335,7 @@ export function PreviewPanel({
       data-decode-queued={videoDecodeQueue.queued}
       data-presented-frames={snapshot.metrics.presentedFrames}
       data-ready={snapshot.ready}
+      data-runtime-sampled-at={Math.round(runtimeMetrics.sampledAtMs)}
       aria-labelledby="preview-panel-title"
     >
       {!embedded ? (
@@ -379,6 +441,38 @@ export function PreviewPanel({
       </div>
 
       <dl className="preview-panel__metrics" aria-label="预览指标">
+        <div>
+          <dt>JS Heap</dt>
+          <dd data-testid="runtime-js-heap">
+            {runtimeMetrics.heap.available
+              ? `${formatBytes(runtimeMetrics.heap.usedJSHeapSize)} / ${formatBytes(heapLimit)}`
+              : "N/A"}
+          </dd>
+        </div>
+        <div>
+          <dt>Storage</dt>
+          <dd data-testid="runtime-storage">
+            {runtimeMetrics.storage.available
+              ? `${formatBytes(runtimeMetrics.storage.usageBytes)} / ${formatBytes(runtimeMetrics.storage.quotaBytes)}`
+              : "N/A"}
+          </dd>
+        </div>
+        <div>
+          <dt>Video Decoder</dt>
+          <dd data-testid="runtime-video-decoder">
+            {videoDecodeQueue.active}/{videoDecodeQueue.queued} · peak{" "}
+            {videoDecodeQueue.activePeak}/{videoDecodeQueue.queuedPeak} · bp{" "}
+            {videoDecodeQueue.backpressureCount}
+          </dd>
+        </div>
+        <div>
+          <dt>Audio Decoder</dt>
+          <dd data-testid="runtime-audio-decoder">
+            {audioDecodeQueue
+              ? `${audioDecodeQueue.active}/${audioDecodeQueue.queued} · peak ${audioDecodeQueue.activePeak}/${audioDecodeQueue.queuedPeak} · bp ${audioDecodeQueue.backpressureCount}`
+              : "N/A"}
+          </dd>
+        </div>
         <div>
           <dt>预览分辨率</dt>
           <dd data-testid="proxy-resolution">

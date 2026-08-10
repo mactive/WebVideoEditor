@@ -316,6 +316,9 @@ test("generates the complete test_1 proxy twice and exercises real preview trans
   const beforePlay = await page.evaluate(
     () => window.__TASK_8_PREVIEW__!.getSnapshot().metrics.playheadUs,
   );
+  const presentedBeforePlay = await page.evaluate(
+    () => window.__TASK_8_PREVIEW__!.getSnapshot().metrics.presentedFrames,
+  );
   await page.getByRole("button", { name: "播放", exact: true }).click();
   await expect
     .poll(() =>
@@ -324,6 +327,13 @@ test("generates the complete test_1 proxy twice and exercises real preview trans
       ),
     )
     .toBeGreaterThan(beforePlay + 200_000);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.__TASK_8_PREVIEW__!.getSnapshot().metrics.presentedFrames,
+      ),
+    )
+    .toBeGreaterThan(presentedBeforePlay + 2);
   await page.getByRole("button", { name: "暂停" }).click();
 
   const beforeStep = await page.evaluate(

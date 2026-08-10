@@ -116,6 +116,8 @@ export function App() {
   const [failure, setFailure] = useState<string>();
   const [status, setStatus] = useState("导入真实素材后添加到时间线");
   const [debugTab, setDebugTab] = useState<DebugTab>("logs");
+  const [structuredLoggingEnabled, setStructuredLoggingEnabled] =
+    useState(true);
   const [runtimeSources, setRuntimeSources] = useState<
     Record<string, RuntimeSource>
   >({});
@@ -191,6 +193,10 @@ export function App() {
       ),
     [runtimeSources],
   );
+
+  useEffect(() => {
+    logHub.setEnabled(structuredLoggingEnabled);
+  }, [logHub, structuredLoggingEnabled]);
 
   useEffect(() => {
     let active = true;
@@ -434,6 +440,7 @@ export function App() {
           <PreviewPanel
             actionAvailability={actions.get("preview")}
             audioSources={audioSources}
+            diagnosticsLoggingEnabled={structuredLoggingEnabled}
             embedded
             logHub={logHub}
             onPlayheadChange={(nextPlayheadUs) => {
@@ -508,7 +515,19 @@ export function App() {
               {label}
             </button>
           ))}
+          <button
+            aria-pressed={structuredLoggingEnabled}
+            data-testid="structured-log-toggle"
+            onClick={() => setStructuredLoggingEnabled((enabled) => !enabled)}
+            type="button"
+          >
+            日志{structuredLoggingEnabled ? "开启" : "关闭"}
+          </button>
         </nav>
+        <p className="editor__debug-status">
+          结构化日志：{structuredLoggingEnabled ? "开启" : "关闭"}
+          ；关闭后不再写入总日志、Console 或预览 Worker 日志回传。
+        </p>
         {actions.get("sharedMemory")?.enabled === false ? (
           <p data-testid="shared-memory-diagnosis" role="alert">
             共享内存实验已禁用：
