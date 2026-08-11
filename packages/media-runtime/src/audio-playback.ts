@@ -155,6 +155,7 @@ export class MediabunnyAudioPlayback {
   private readonly nodes = new Map<AudioBufferSourceNode, number>();
   private readonly ownsContext: boolean;
   private readonly scheduleLeadSec: number;
+  private readonly sources = new Map<string, PlaybackMediaSource>();
   private abortController?: AbortController;
   private anchorProjectUs = 0;
   private anchorSeconds = 0;
@@ -181,6 +182,7 @@ export class MediabunnyAudioPlayback {
     });
     this.lookAheadUs = options.lookAheadUs ?? 4_000_000;
     this.scheduleLeadSec = options.scheduleLeadSec ?? 0.06;
+    this.setSources(options.sources);
   }
 
   async start(request: AudioPlaybackRequest): Promise<AudioPlaybackStart> {
@@ -247,6 +249,16 @@ export class MediabunnyAudioPlayback {
     this.invalidate(reason);
   }
 
+  setSources(sources: ReadonlyMap<string, PlaybackMediaSource>): void {
+    this.sources.clear();
+    for (const [assetId, source] of sources) {
+      this.sources.set(assetId, source);
+    }
+    if (this.request) {
+      this.invalidate("sources-updated");
+    }
+  }
+
   stats(): AudioPlaybackStats {
     return {
       activeGenerations: [...new Set(this.nodes.values())],
@@ -288,7 +300,7 @@ export class MediabunnyAudioPlayback {
         clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs;
       const intersectionStartUs = Math.max(startUs, clip.timelineStartUs);
       const intersectionEndUs = Math.min(endUs, clipEndUs);
-      const source = this.options.sources.get(clip.assetId);
+      const source = this.sources.get(clip.assetId);
       if (!source || intersectionEndUs <= intersectionStartUs) {
         continue;
       }

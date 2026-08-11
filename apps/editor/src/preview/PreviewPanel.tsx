@@ -146,6 +146,7 @@ export function PreviewPanel({
       storage: { available: false },
     }));
   const previewEnabled = actionAvailability?.enabled === true;
+  const hasPreviewSources = sources.length > 0;
   const sourceKey = sources
     .map((source) => {
       const metadata = previewSourceMetadata(source);
@@ -193,7 +194,7 @@ export function PreviewPanel({
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !previewEnabled || sources.length === 0) {
+    if (!host || !previewEnabled || !hasPreviewSources) {
       setSnapshot(initialSnapshot(projectRef.current));
       host?.replaceChildren();
       return;
@@ -290,14 +291,21 @@ export function PreviewPanel({
       }
     };
   }, [
-    audioSourceKey,
     fallbackLogHub,
+    hasPreviewSources,
     providedLogHub,
-    sourceKey,
-    sources,
-    audioSources,
     previewEnabled,
   ]);
+
+  useEffect(() => {
+    runtimeRef.current?.setSources(sources);
+  }, [sourceKey, sources]);
+
+  useEffect(() => {
+    if (audioSources) {
+      runtimeRef.current?.setAudioSources(audioSources);
+    }
+  }, [audioSourceKey, audioSources]);
 
   useEffect(() => {
     runtimeRef.current?.setProject(project);

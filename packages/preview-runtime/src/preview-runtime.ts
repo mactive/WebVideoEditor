@@ -5,6 +5,7 @@ import {
   createSeekStream,
   selectVideoFrameByTimestamp,
   type MediabunnyAudioPlayback,
+  type PlaybackMediaSource,
   type ResourceLifecycleSnapshot,
 } from "@web-video-editor/media-runtime";
 import type { StructuredLogger } from "@web-video-editor/observability";
@@ -158,6 +159,50 @@ export class PreviewRuntime {
     this.seek(
       Math.min(this.snapshot.metrics.playheadUs, this.snapshot.durationUs),
     );
+    if (resume) {
+      this.play();
+    }
+  }
+
+  setSources(sources: readonly PreviewSource[]): void {
+    const resume = this.snapshot.playing;
+    const playheadUs = this.snapshot.metrics.playheadUs;
+    if (resume || this.snapshot.buffering) {
+      this.pause();
+    }
+    this.sources.clear();
+    for (const source of sources) {
+      this.sources.set(source.assetId, source);
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      metrics: {
+        ...this.snapshot.metrics,
+        cacheHitRate:
+          sources.length === 0
+            ? 0
+            : sources.filter((source) => source.cacheStatus === "hit").length /
+              sources.length,
+      },
+    };
+    this.seek(playheadUs);
+    if (resume) {
+      this.play();
+    }
+  }
+
+  setAudioSources(sources: ReadonlyMap<string, PlaybackMediaSource>): void {
+    const audio = this.options.audio;
+    if (!audio) {
+      return;
+    }
+    const resume = this.snapshot.playing;
+    const playheadUs = this.snapshot.metrics.playheadUs;
+    if (resume || this.snapshot.buffering) {
+      this.pause();
+    }
+    audio.setSources(sources);
+    this.seek(playheadUs);
     if (resume) {
       this.play();
     }

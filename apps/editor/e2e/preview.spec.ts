@@ -1,5 +1,75 @@
 import { expect, test } from "@playwright/test";
 
+test.describe.configure({ mode: "serial" });
+
+async function canvasNonBlackPixels(page: import("@playwright/test").Page) {
+  return page.locator("canvas[data-preview-canvas='pixi-v8']").evaluate(
+    (canvas) => {
+      const source = canvas as HTMLCanvasElement;
+      const copy = document.createElement("canvas");
+      copy.width = source.width;
+      copy.height = source.height;
+      const context = copy.getContext("2d");
+      context?.drawImage(source, 0, 0);
+      const data = context?.getImageData(0, 0, copy.width, copy.height).data;
+      let nonBlack = 0;
+      if (data) {
+        for (let index = 0; index < data.length; index += 4) {
+          const sum =
+            (data[index] ?? 0) + (data[index + 1] ?? 0) + (data[index + 2] ?? 0);
+          if (sum > 30) {
+            nonBlack += 1;
+          }
+        }
+      }
+      return nonBlack;
+    },
+  );
+}
+
+test("keeps the direct preview frame visible when proxy becomes ready", async ({
+  page,
+}) => {
+  test.setTimeout(5 * 60_000);
+  await page.goto("/");
+  await page.getByRole("button", { name: "清理代理缓存" }).click();
+  await page.getByRole("button", { name: /test_1\.mp4/ }).click();
+  const mediaItem = page
+    .locator(".media-panel__results > li")
+    .filter({ hasText: "test_1.mp4" })
+    .first();
+  await expect(mediaItem).toHaveAttribute("data-status", "ready", {
+    timeout: 90_000,
+  });
+  await mediaItem.getByRole("button", { name: /添加到时间线/ }).click();
+
+  const panel = page.locator(".preview-panel");
+  await expect(panel).toHaveAttribute("data-ready", "true", {
+    timeout: 60_000,
+  });
+  await expect
+    .poll(
+      async () => Number(await panel.getAttribute("data-presented-frames")),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
+  expect(await canvasNonBlackPixels(page)).toBeGreaterThan(10_000);
+
+  await expect(mediaItem.locator(".proxy-progress")).toHaveAttribute(
+    "data-status",
+    "ready",
+    { timeout: 4 * 60_000 },
+  );
+  expect(await canvasNonBlackPixels(page)).toBeGreaterThan(10_000);
+  await expect
+    .poll(
+      async () => Number(await panel.getAttribute("data-presented-frames")),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(1);
+  expect(await canvasNonBlackPixels(page)).toBeGreaterThan(10_000);
+});
+
 test("renders test_1 proxy, keeps latest seek, and releases frames", async ({
   page,
 }) => {
