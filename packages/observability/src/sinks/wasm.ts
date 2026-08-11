@@ -20,7 +20,7 @@ export class WasmLogSink {
     this.logger = new StructuredLogger(sink, scope, clock);
   }
 
-  write(diagnostic: WasmDiagnostic): LogEntry {
+  write(diagnostic: WasmDiagnostic): LogEntry | undefined {
     return this.logger.log({
       ...diagnostic,
       level:

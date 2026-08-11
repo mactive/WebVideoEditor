@@ -19,13 +19,42 @@ export const MEDIA_PROXY_CACHE_CLEAR_OPERATION =
 
 const stageProgress: Record<MediaProxyProgress["stage"], number> = {
   cache: 0.02,
-  thumbnails: 0.12,
-  keyframes: 0.2,
+  thumbnails: 0.02,
+  keyframes: 0.93,
   transcode: 0.35,
   waveform: 0.35,
-  commit: 0.95,
+  commit: 0.97,
   completed: 1,
 };
+
+function timeBasedRatio(progress: MediaProxyProgress): number | undefined {
+  if (
+    progress.durationSec === undefined ||
+    progress.processedTimeSec === undefined ||
+    progress.durationSec <= 0
+  ) {
+    return undefined;
+  }
+  const fraction = Math.max(
+    0,
+    Math.min(1, progress.processedTimeSec / progress.durationSec),
+  );
+  switch (progress.stage) {
+    case "thumbnails":
+      return 0.02 + fraction * 0.1;
+    case "transcode":
+    case "waveform":
+      return 0.12 + fraction * 0.8;
+    case "keyframes":
+      return 0.93;
+    case "commit":
+      return 0.97;
+    case "completed":
+      return 1;
+    case "cache":
+      return 0.02;
+  }
+}
 
 export function registerMediaProxyTasks(
   host: MediaWorkerHost,
@@ -59,7 +88,10 @@ export function registerMediaProxyTasks(
       fingerprint: request.fingerprint,
       logger: options.logger,
       onProgress: (progress) => {
-        ratio = Math.max(ratio, stageProgress[progress.stage]);
+        ratio = Math.max(
+          ratio,
+          timeBasedRatio(progress) ?? stageProgress[progress.stage],
+        );
         context.progress(
           {
             completed: ratio,

@@ -31,6 +31,9 @@ pnpm dev:editor
 
 ## 实验一：test_1 快速闭环
 
+默认结构化日志关闭。这个状态下播放和 Seek 不应持续向总日志、Console 或预览 Worker
+日志回传写入大量帧级日志；需要排查时再打开日志开关。
+
 1. 点 `test_1.mp4`，确认主轨为 AVC 720×720，排除项显示 MJPEG/JPEG cover。
 2. 点“添加到时间线”，裁剪源入点 `0.5s`、出点 `1.1s`。
 3. 选“复古”，强度 `0.8`；添加标题 `TASK 13`，结束时间 `0.6s`。
@@ -38,6 +41,8 @@ pnpm dev:editor
 5. Undo/Redo 标题结束时间，最后导出。
 
 ```text
+UI: 日志开关默认显示“日志关闭”
+UI: proxy 未完成时仍有 source fallback 画面；proxy ready 后不清空画布
 UI: Project revision 递增；最终导出 1.0s、30 帧、1920×1080
 Console: [IMPORT]/[COMMAND]/[ECS]/[RENDER]/[EXPORT]
 CLI: 若运行核心 E2E，30 VideoFrame created/released，active=0
@@ -55,6 +60,8 @@ pnpm test:e2e:test2
 
 ```text
 预期断言: fullFileRead=false，readRatio<0.02
+预期断言: progress 含 durationSec、processedTimeSec、outputBytes
+预期断言: processedTimeSec > 0 且不超过 durationSec
 预期断言: afterCancel.temporaryEntries=0
 预期断言: first.cache.status=miss，second.cache.status=hit
 CLI: [TASK12_TEST2] {"probeBytes":...,"probeMs":...,"firstProxyMs":...}
@@ -66,6 +73,8 @@ CLI: [TASK12_TEST2] {"probeBytes":...,"probeMs":...,"firstProxyMs":...}
 | ----------------------------- | -----: | -----: | ------------------ |
 | probeBytes / readRatio        |        |        | `[TASK12_TEST2]`   |
 | probeMs                       |        |        | 同一浏览器进程     |
+| progress processed/duration   |        |        | proxy progress UI  |
+| outputBytes                   |        |        | progress 或 result |
 | firstProxyMs / secondProxyMs  |        |        | 仅比较本轮         |
 | cacheBytes / temporaryEntries |        |        | 取消后 temp 必须 0 |
 | heapBytes / OPFS usage        |        |        | 指标不可用时写 N/A |

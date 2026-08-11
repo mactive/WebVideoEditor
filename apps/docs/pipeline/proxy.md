@@ -26,6 +26,10 @@ flowchart TD
 代理仅替换 preview/audio runtime source；`originalSources` 独立保留给导出。素材刚完成
 探测时可立即用原素材预览，代理完成后切换为 `opfs-proxy`。
 
+长视频不强制等待完整 proxy 完成后才能添加到时间线。小视频可直接添加；长视频允许立即
+添加并走 `source` fallback，但频繁 seek 或长时间编辑前推荐等待关键 proxy 可用，或先跑
+后台预处理。内存、Storage、WASM 和分段策略见[长视频 Proxy 性能策略](/pipeline/long-video-proxy)。
+
 ## 复现与预期输出
 
 ```bash

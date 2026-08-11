@@ -1,0 +1,22 @@
+# Checklist
+
+- [x] 小视频 `test_1.mp4` 可在 proxy 未完成时立即添加到时间线，并通过 source fallback 看到预览画面。
+- [x] 长视频 `test_2.mp4` 在 proxy 未完成时添加到时间线前，UI 明确提示当前是 source fallback、proxy running 或 cache hit 状态。
+- [x] proxy ready 后，预览从 source 切换到 proxy 时不清空画布、不出现可感知黑屏。
+- [x] proxy progress UI 展示阶段、百分比、已处理媒体时间/总时长、输出字节和耗时。
+- [x] proxy progress UI 展示 OPFS committed/temporary bytes、Storage usage/quota，以及主线程 JS heap；不可稳定获取的 Worker heap 明确标注不可用。
+- [x] `test_2.mp4` 的 proxy 进度比例会随处理媒体时间持续推进，不长时间固定在 thumbnails 的同一百分比。
+- [x] 长视频 proxy 使用受控缩略图数量和轻量参数，避免首次 thumbnails 阶段生成数百张缩略图。
+- [x] 长视频 proxy timeout 按素材时长放宽，用户仍可主动取消。
+- [x] proxy 取消后 OPFS temporary entries 回到 0，不留下不可识别的临时目录。
+- [x] 重复导入同一素材和同一参数时可命中 OPFS cache，不重复完整生成。
+- [x] 文档回答“是否必须等 proxy 完成再添加”：默认不强制，小视频可直接添加，长视频推荐等待或后台预处理但允许立即添加。
+- [x] 文档解释 WASM、WebCodecs/Mediabunny、分段 proxy、预处理缓存各自适用的加速边界。
+- [x] 自动化或手动验证记录包含 `test_1.mp4` 播放日志开关影响和 `test_2.mp4` proxy 进度/内存/存储证据。
+- [x] `MEDIA IMPORT` 区域视觉宽度扩大到当前约 2 倍，素材元数据、proxy 状态、内存/存储和错误信息可读。
+- [x] 加宽后预览区和 Inspector 仍可用，窄窗口下关键操作按钮不会被遮挡。
+- [x] `test_3.mp4` proxy 不再因小幅 PCM sample count mismatch 直接失败；波形基于实际样本数或阈值内补齐/截断策略生成。
+- [x] PCM mismatch 日志或 UI 包含 expected、received、delta、tolerance 和处理策略。
+- [x] 严重 PCM mismatch 仍会失败或降级，并提供可诊断错误，不会静默生成错误波形。
+- [x] 可恢复 proxy 失败状态提供“重试代理”入口，重试复用素材 fingerprint 和 proxy 参数。
+- [x] `test_3.mp4` proxy 回归验证通过，证明代理产物可生成、缓存可用且 OPFS 临时目录清理正确。

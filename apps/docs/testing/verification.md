@@ -33,6 +33,31 @@ Vitest、生产构建、核心 Playwright。每步输出 START/PASS/耗时；失
 核心 E2E 在快速 Seek 后轮询 VideoFrame active 回到 0；导出后断言 30 个 frame 全部释放、
 AudioData active=0、最终文件可解码。它证明该场景资源闭环，不等同于所有时长都无泄漏。
 
+## Task 6 回归证据
+
+`test_1.mp4` 默认走核心与预览 E2E：
+
+```bash
+pnpm test:e2e:core
+pnpm exec playwright test apps/editor/e2e/preview.spec.ts --grep "direct preview"
+```
+
+需要证明：
+
+1. 日志开关初始为“日志关闭”，关闭时不再写入总日志、Console 或预览 Worker 日志回传。
+2. 素材可在 proxy 未完成时添加到时间线，并先显示 direct source fallback 画面。
+3. proxy ready 后 runtime source 切到 OPFS proxy，画布非黑像素仍存在，presented frames 继续推进。
+
+`test_2.mp4` 不进入默认 verify，使用手动性能脚本：
+
+```bash
+pnpm test:e2e:test2
+```
+
+该脚本断言 Range 探测没有读完整文件、取消后 OPFS `temporaryEntries=0`、同参数第二次生成
+cache hit、Storage usage 大于等于 committed bytes，并采集 proxy progress 样本证明
+`durationSec`、`processedTimeSec`、`outputBytes` 可见且处理媒体时间向前推进。
+
 ## 两分钟手动检查模板
 
 1. DevTools Performance/Memory 开启采样。

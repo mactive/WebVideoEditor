@@ -58,7 +58,10 @@ export class StructuredLogger {
 
   log<M extends LogMarker>(
     draft: Omit<LogDraft<M>, "scope"> & { scope?: string },
-  ): LogEntry {
+  ): LogEntry | undefined {
+    if (this.sink.isEnabled?.() === false) {
+      return undefined;
+    }
     const entry = createLogEntry(
       {
         ...draft,
@@ -97,7 +100,7 @@ export class RequestTrace {
       projectRevision?: number;
       scope?: string;
     },
-  ): LogEntry {
+  ): LogEntry | undefined {
     return this.logger.log({
       ...draft,
       projectRevision: draft.projectRevision ?? this.projectRevision,

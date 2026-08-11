@@ -78,7 +78,7 @@ function logWasm(
   logger: WasmLogger,
   draft: WasmLogDraft,
   requestId?: string,
-): WasmLogEvent {
+): WasmLogEvent | undefined {
   return logger.log({
     ...draft,
     marker: "[WASM]",

@@ -139,12 +139,13 @@ export function PreviewPanel({
   const fallbackLogHub = useMemo(() => new LogHub([new ConsoleLogSink()]), []);
   const [snapshot, setSnapshot] = useState(() => initialSnapshot(project));
   const [activeVideoFrames, setActiveVideoFrames] = useState(0);
-  const [runtimeMetrics, setRuntimeMetrics] =
-    useState<RuntimeDashboardSample>(() => ({
+  const [runtimeMetrics, setRuntimeMetrics] = useState<RuntimeDashboardSample>(
+    () => ({
       heap: sampleJsHeapMetrics(),
       sampledAtMs: performance.now(),
       storage: { available: false },
-    }));
+    }),
+  );
   const previewEnabled = actionAvailability?.enabled === true;
   const hasPreviewSources = sources.length > 0;
   const sourceKey = sources
@@ -290,12 +291,7 @@ export function PreviewPanel({
         renderer?.destroy();
       }
     };
-  }, [
-    fallbackLogHub,
-    hasPreviewSources,
-    providedLogHub,
-    previewEnabled,
-  ]);
+  }, [fallbackLogHub, hasPreviewSources, providedLogHub, previewEnabled]);
 
   useEffect(() => {
     runtimeRef.current?.setSources(sources);
@@ -330,6 +326,15 @@ export function PreviewPanel({
     snapshot.metrics.codecQueues.audioDecoder?.applicationQueue;
   const heapLimit =
     runtimeMetrics.heap.jsHeapSizeLimit ?? runtimeMetrics.heap.totalJSHeapSize;
+  const sourceSummary = sources.map((source) => {
+    const metadata = previewSourceMetadata(source);
+    return {
+      assetId: source.assetId,
+      cacheStatus: source.cacheStatus,
+      kind: "manifest" in source ? "proxy" : "source",
+      metadata,
+    };
+  });
 
   return (
     <section
@@ -448,6 +453,19 @@ export function PreviewPanel({
       </div>
 
       <dl className="preview-panel__metrics" aria-label="预览指标">
+        <div>
+          <dt>Source</dt>
+          <dd data-testid="preview-source-mode">
+            {sourceSummary.length > 0
+              ? sourceSummary
+                  .map(
+                    (source) =>
+                      `${source.assetId}: ${source.kind}${source.kind === "source" ? " fallback" : ""} · cache ${source.cacheStatus} · ${source.metadata.width}×${source.metadata.height}`,
+                  )
+                  .join(" / ")
+              : "N/A"}
+          </dd>
+        </div>
         <div>
           <dt>JS Heap</dt>
           <dd data-testid="runtime-js-heap">

@@ -32,7 +32,7 @@ import {
 import { ExportPanel } from "./export/ExportPanel";
 import { Inspector } from "./inspector/Inspector";
 import { LogPanel } from "./logs/LogPanel";
-import { MediaPanel } from "./media/MediaPanel";
+import { MediaPanel, type TimelineAddContext } from "./media/MediaPanel";
 import { PreviewPanel } from "./preview/PreviewPanel";
 import {
   ProjectCommandController,
@@ -117,7 +117,7 @@ export function App() {
   const [status, setStatus] = useState("导入真实素材后添加到时间线");
   const [debugTab, setDebugTab] = useState<DebugTab>("logs");
   const [structuredLoggingEnabled, setStructuredLoggingEnabled] =
-    useState(true);
+    useState(false);
   const [runtimeSources, setRuntimeSources] = useState<
     Record<string, RuntimeSource>
   >({});
@@ -302,7 +302,7 @@ export function App() {
     setStatus(`${asset.name} 已导入，可立即添加并用原素材预览`);
   };
 
-  const addToTimeline = (assetId: string) => {
+  const addToTimeline = (assetId: string, addContext?: TimelineAddContext) => {
     const current = editorStore.getState().project.document;
     const asset = current.assets.find((candidate) => candidate.id === assetId);
     if (!asset) {
@@ -329,6 +329,13 @@ export function App() {
       type: "clip.add",
     });
     editorStore.dispatch(clipSelected(clipId));
+    if (addContext) {
+      setStatus(
+        addContext.previewSource === "proxy"
+          ? `${addContext.assetName} 已添加到时间线：使用 proxy 预览（cache ${addContext.cacheStatus}）。`
+          : `${addContext.assetName} 已添加到时间线：当前使用 source fallback，proxy ${addContext.proxyStatus}；${addContext.risk}`,
+      );
+    }
   };
 
   const addTitle = () => {
@@ -518,16 +525,15 @@ export function App() {
           <button
             aria-pressed={structuredLoggingEnabled}
             data-testid="structured-log-toggle"
-            onClick={() =>
-              setStructuredLoggingEnabled((enabled) => !enabled)
-            }
+            onClick={() => setStructuredLoggingEnabled((enabled) => !enabled)}
             type="button"
           >
             日志{structuredLoggingEnabled ? "开启" : "关闭"}
           </button>
         </nav>
         <p className="editor__debug-status">
-          结构化日志：{structuredLoggingEnabled ? "开启" : "关闭"}；关闭后不再写入总日志、Console 或预览 Worker 日志回传。
+          结构化日志：{structuredLoggingEnabled ? "开启" : "关闭"}
+          ；关闭后不再写入总日志、Console 或预览 Worker 日志回传。
         </p>
         {actions.get("sharedMemory")?.enabled === false ? (
           <p data-testid="shared-memory-diagnosis" role="alert">

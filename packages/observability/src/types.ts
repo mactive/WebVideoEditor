@@ -47,6 +47,7 @@ export type LogDraft<M extends LogMarker> = {
 };
 
 export interface LogSink {
+  isEnabled?(): boolean;
   write(entry: LogEntry): void;
 }
 

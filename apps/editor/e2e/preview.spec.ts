@@ -32,6 +32,9 @@ test("keeps the direct preview frame visible when proxy becomes ready", async ({
 }) => {
   test.setTimeout(5 * 60_000);
   await page.goto("/");
+  await expect(page.getByTestId("structured-log-toggle")).toHaveText(
+    "日志关闭",
+  );
   await page.getByRole("button", { name: "清理代理缓存" }).click();
   await page.getByRole("button", { name: /test_1\.mp4/ }).click();
   const mediaItem = page
@@ -68,6 +71,9 @@ test("keeps the direct preview frame visible when proxy becomes ready", async ({
     )
     .toBeGreaterThan(1);
   expect(await canvasNonBlackPixels(page)).toBeGreaterThan(10_000);
+  expect(
+    await page.evaluate(() => window.__TASK_14_RUNTIME__?.getLogs().length),
+  ).toBe(0);
 });
 
 test("renders test_1 proxy, keeps latest seek, and releases frames", async ({

@@ -1,11 +1,13 @@
 export const MEDIA_PROXY_OPERATION = "media.proxy.generate" as const;
 export const MEDIA_PROXY_RESULT_VERSION = 1 as const;
+export const LONG_VIDEO_PROXY_DURATION_SEC = 10 * 60;
 
 export type ProxyGenerationParameters = {
   frameRate: number;
   keyFrameIntervalSec: number;
   maxDurationSec?: number;
   maxHeight: number;
+  maxThumbnailCount: number;
   maxWidth: number;
   thumbnailIntervalSec: number;
   thumbnailWidth: number;
@@ -16,11 +18,19 @@ export const DEFAULT_PROXY_PARAMETERS: ProxyGenerationParameters = {
   frameRate: 30,
   keyFrameIntervalSec: 2,
   maxHeight: 540,
+  maxThumbnailCount: 120,
   maxWidth: 960,
   thumbnailIntervalSec: 5,
   thumbnailWidth: 160,
   waveformBuckets: 512,
 };
+
+export const LONG_VIDEO_PROXY_PARAMETER_OVERRIDES: Partial<ProxyGenerationParameters> =
+  {
+    frameRate: 15,
+    maxThumbnailCount: 80,
+    thumbnailIntervalSec: 30,
+  };
 
 export type ProxyArtifact = {
   byteLength: number;
@@ -52,10 +62,58 @@ export type ProxyCacheStats = {
 
 export type ProxyCacheStatus = "hit" | "miss";
 
+export type ProxySegmentStatus =
+  | "pending"
+  | "processing"
+  | "ready"
+  | "failed";
+
+export type ProxySegmentManifest = {
+  cacheKey: string;
+  endSec: number;
+  error?: string;
+  index: number;
+  keyframes: ProxyKeyframe[];
+  proxy?: ProxyArtifact & {
+    durationSec: number;
+    frameRate: number;
+    height: number;
+    width: number;
+  };
+  startSec: number;
+  status: ProxySegmentStatus;
+};
+
+/**
+ * Draft contract for future segmented proxy playback.
+ *
+ * Preview readers should use a segment proxy when the matching segment status is
+ * `ready` and fall back to the original source for missing, pending, processing,
+ * or failed ranges. The current pipeline still writes a single full proxy.
+ */
+export type ProxySegmentManifestDraft = {
+  fallback: "source";
+  segmentDurationSec: number;
+  segments: ProxySegmentManifest[];
+  strategy: "segment-proxy-source-fallback";
+  version: 1;
+};
+
+export type ProxyPcmSampleCountDiagnostics = {
+  delta: number;
+  expected: number;
+  received: number;
+  strategy: "exact" | "fail" | "pad-silence" | "truncate-tail";
+  tolerance: number;
+};
+
 export type ProxyManifest = {
   cacheKey: string;
   cover: ProxyImageArtifact;
   createdAt: string;
+  diagnostics?: {
+    pcmSampleCount?: ProxyPcmSampleCountDiagnostics;
+  };
   fingerprint: string;
   keyframes: ProxyKeyframe[];
   parameters: ProxyGenerationParameters;
@@ -70,6 +128,7 @@ export type ProxyManifest = {
     height: number;
     width: number;
   };
+  segments?: ProxySegmentManifestDraft;
   thumbnails: ProxyImageArtifact[];
   version: typeof MEDIA_PROXY_RESULT_VERSION;
   waveform: ProxyArtifact & {
@@ -87,14 +146,20 @@ export type MediaProxyRequest = {
 };
 
 export type MediaProxyProgress = {
+  cacheAdapter?: ProxyCacheStats["adapter"];
+  cacheEntries?: number;
   cacheStatus?: ProxyCacheStatus;
+  committedBytes?: number;
+  durationSec?: number;
   elapsedMs: number;
   inputHeight?: number;
   inputWidth?: number;
   outputBytes?: number;
   outputHeight?: number;
   outputWidth?: number;
+  pcmSampleCount?: ProxyPcmSampleCountDiagnostics;
   processedTimeSec?: number;
+  storageEstimate?: ProxyCacheStats["storageEstimate"];
   stage:
     | "cache"
     | "thumbnails"
@@ -103,6 +168,8 @@ export type MediaProxyProgress = {
     | "waveform"
     | "commit"
     | "completed";
+  temporaryBytes?: number;
+  temporaryEntries?: number;
 };
 
 export type MediaProxyResult = {
@@ -128,11 +195,19 @@ function positiveFinite(value: number, name: string): void {
 
 export function resolveProxyParameters(
   input: Partial<ProxyGenerationParameters> = {},
+  durationSec?: number,
 ): ProxyGenerationParameters {
-  const parameters = { ...DEFAULT_PROXY_PARAMETERS, ...input };
+  const parameters = {
+    ...DEFAULT_PROXY_PARAMETERS,
+    ...(durationSec !== undefined && durationSec >= LONG_VIDEO_PROXY_DURATION_SEC
+      ? LONG_VIDEO_PROXY_PARAMETER_OVERRIDES
+      : undefined),
+    ...input,
+  };
   positiveFinite(parameters.frameRate, "frameRate");
   positiveFinite(parameters.keyFrameIntervalSec, "keyFrameIntervalSec");
   positiveInteger(parameters.maxHeight, "maxHeight");
+  positiveInteger(parameters.maxThumbnailCount, "maxThumbnailCount");
   positiveInteger(parameters.maxWidth, "maxWidth");
   positiveFinite(parameters.thumbnailIntervalSec, "thumbnailIntervalSec");
   positiveInteger(parameters.thumbnailWidth, "thumbnailWidth");

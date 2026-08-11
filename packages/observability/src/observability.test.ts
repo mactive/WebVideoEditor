@@ -221,11 +221,12 @@ describe("sinks and request tracing", () => {
       requestId: "wasm_01",
     });
 
-    expect(entry.marker).toBe("[WASM]");
-    expect(entry.input).toEqual(
+    expect(entry).toBeDefined();
+    expect(entry!.marker).toBe("[WASM]");
+    expect(entry!.input).toEqual(
       expect.objectContaining({ kind: "binary", type: "Uint8Array" }),
     );
-    expect(hub.getEntries()).toEqual([entry]);
+    expect(hub.getEntries()).toEqual([entry!]);
   });
 
   it("restores a cross-thread seek trace in receive order", () => {

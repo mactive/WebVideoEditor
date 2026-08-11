@@ -32,11 +32,17 @@ import {
   resolveProxyParameters,
   type MediaProxyProgress,
   type MediaProxyResult,
+  type ProxyPcmSampleCountDiagnostics,
+  type ProxyCacheStats,
   type ProxyGenerationParameters,
   type ProxyImageArtifact,
   type ProxyKeyframe,
   type ProxyManifest,
 } from "./proxy-types";
+
+const PROGRESS_STATS_SAMPLE_INTERVAL_MS = 2_000;
+const PCM_SAMPLE_COUNT_TOLERANCE_SEC = 0.1;
+const PCM_SAMPLE_COUNT_MIN_TOLERANCE = 2_048;
 
 type GenerateMediaProxyOptions = {
   cache: ProxyCacheAdapter;
@@ -54,6 +60,15 @@ type PrimaryTracks = {
   audio: InputAudioTrack | null;
   video: InputVideoTrack;
 };
+
+class PcmSampleCountMismatchError extends Error {
+  constructor(readonly diagnostics: ProxyPcmSampleCountDiagnostics) {
+    super(
+      `Decoded PCM sample count mismatch: expected ${diagnostics.expected}, received ${diagnostics.received}, delta ${diagnostics.delta}, tolerance ${diagnostics.tolerance}, strategy ${diagnostics.strategy}`,
+    );
+    this.name = "PcmSampleCountMismatchError";
+  }
+}
 
 function browserSource(source: BrowserMediaSource): Source {
   return "blob" in source
@@ -82,7 +97,11 @@ function effectiveDuration(
   return Math.min(durationSec, parameters.maxDurationSec ?? durationSec);
 }
 
-function timestampSeries(durationSec: number, intervalSec: number): number[] {
+function timestampSeries(
+  durationSec: number,
+  intervalSec: number,
+  maxCount: number,
+): number[] {
   const timestamps = [0];
   for (
     let timestamp = intervalSec;
@@ -90,6 +109,13 @@ function timestampSeries(durationSec: number, intervalSec: number): number[] {
     timestamp += intervalSec
   ) {
     timestamps.push(timestamp);
+  }
+  if (timestamps.length > maxCount) {
+    return Array.from({ length: maxCount }, (_, index) =>
+      index === 0
+        ? 0
+        : (durationSec * index) / Math.max(1, maxCount - 1),
+    );
   }
   return timestamps;
 }
@@ -131,6 +157,7 @@ async function createImages(
   const timestamps = timestampSeries(
     durationSec,
     parameters.thumbnailIntervalSec,
+    parameters.maxThumbnailCount,
   );
   const sink = new VideoSampleSink(track);
   const thumbnails: ProxyImageArtifact[] = [];
@@ -167,6 +194,7 @@ async function createImages(
     }
     index += 1;
     report("thumbnails", {
+      durationSec,
       processedTimeSec: timestampSec,
     });
   }
@@ -218,6 +246,40 @@ function trimAudioSample(
     : sample.trim(startFrame, endFrame);
 }
 
+function pcmSampleCountTolerance(sampleRate: number): number {
+  return sampleRate > 0
+    ? Math.max(
+        PCM_SAMPLE_COUNT_MIN_TOLERANCE,
+        Math.round(sampleRate * PCM_SAMPLE_COUNT_TOLERANCE_SEC),
+      )
+    : 0;
+}
+
+function pcmSampleCountDiagnostics(
+  expected: number,
+  received: number,
+  sampleRate: number,
+): ProxyPcmSampleCountDiagnostics | undefined {
+  const delta = received - expected;
+  if (delta === 0) {
+    return undefined;
+  }
+  const tolerance = pcmSampleCountTolerance(sampleRate);
+  const strategy =
+    Math.abs(delta) > tolerance
+      ? "fail"
+      : delta < 0
+        ? "pad-silence"
+        : "truncate-tail";
+  return {
+    delta,
+    expected,
+    received,
+    strategy,
+    tolerance,
+  };
+}
+
 async function transcode(
   input: Input,
   tracks: PrimaryTracks,
@@ -226,12 +288,14 @@ async function transcode(
   parameters: ProxyGenerationParameters,
   transaction: ProxyCacheTransaction,
   waveform: PcmWaveformSession,
+  expectedWaveformSamples: number,
   report: (stage: MediaProxyProgress["stage"], fields?: object) => void,
   signal?: AbortSignal,
 ): Promise<{
   keyframes: ProxyKeyframe[];
   outputBytes: number;
-  sampleCount: number;
+  decodedSampleCount: number;
+  waveformSampleCount: number;
 }> {
   const writable = await transaction.createWritable("proxy.mp4");
   const target = new StreamTarget(writable, {
@@ -291,7 +355,8 @@ async function transcode(
   await output.start();
   const cancel = () => void output.cancel();
   signal?.addEventListener("abort", cancel, { once: true });
-  let sampleCount = 0;
+  let decodedSampleCount = 0;
+  let waveformSampleCount = 0;
   let lastAudioProgressSec = -Infinity;
   let lastVideoProgressSec = -Infinity;
   const shouldReport = (timestampSec: number, previous: number) =>
@@ -310,6 +375,7 @@ async function transcode(
           if (shouldReport(sample.timestamp, lastVideoProgressSec)) {
             lastVideoProgressSec = sample.timestamp;
             report("transcode", {
+              durationSec,
               outputBytes,
               processedTimeSec: sample.timestamp,
             });
@@ -339,11 +405,21 @@ async function transcode(
         try {
           sample.setTimestamp(Math.max(0, sample.timestamp));
           const pcm = monoPcm(sample);
-          waveform.push(pcm);
-          sampleCount += pcm.length;
+          decodedSampleCount += pcm.length;
+          const remainingWaveformSamples =
+            expectedWaveformSamples - waveformSampleCount;
+          if (remainingWaveformSamples > 0) {
+            const waveformPcm =
+              pcm.length > remainingWaveformSamples
+                ? pcm.subarray(0, remainingWaveformSamples)
+                : pcm;
+            waveform.push(waveformPcm);
+            waveformSampleCount += waveformPcm.length;
+          }
           if (shouldReport(sample.timestamp, lastAudioProgressSec)) {
             lastAudioProgressSec = sample.timestamp;
             report("waveform", {
+              durationSec,
               outputBytes,
               processedTimeSec: sample.timestamp,
             });
@@ -359,7 +435,7 @@ async function transcode(
     await Promise.all([videoPump(), audioPump()]);
     signal?.throwIfAborted();
     await output.finalize();
-    return { keyframes, outputBytes, sampleCount };
+    return { decodedSampleCount, keyframes, outputBytes, waveformSampleCount };
   } catch (error) {
     if (output.state !== "canceled" && output.state !== "finalized") {
       await output.cancel();
@@ -391,19 +467,65 @@ function waveformExtrema(
   };
 }
 
+function progressStatsFields(
+  stats: ProxyCacheStats | undefined,
+): Partial<MediaProxyProgress> {
+  if (!stats) {
+    return {};
+  }
+  return {
+    cacheAdapter: stats.adapter,
+    cacheEntries: stats.entries,
+    committedBytes: stats.committedBytes,
+    storageEstimate: stats.storageEstimate,
+    temporaryBytes: stats.temporaryBytes,
+    temporaryEntries: stats.temporaryEntries,
+  };
+}
+
 export async function generateMediaProxy(
   options: GenerateMediaProxyOptions,
 ): Promise<MediaProxyResult> {
   const startedAt = performance.now();
-  const parameters = resolveProxyParameters(options.parameters);
-  const cacheKey = await createProxyCacheKey(options.fingerprint, parameters);
+  let cacheKey: string | undefined;
+  let parameters: ProxyGenerationParameters | undefined;
+  let latestStats: ProxyCacheStats | undefined;
+  let lastStatsSampleAt = Number.NEGATIVE_INFINITY;
+  let statsSample: Promise<void> | undefined;
   const report = (
     stage: MediaProxyProgress["stage"],
     fields: Partial<MediaProxyProgress> = {},
   ) => {
+    const now = performance.now();
+    if (
+      !statsSample &&
+      now - lastStatsSampleAt >= PROGRESS_STATS_SAMPLE_INTERVAL_MS
+    ) {
+      lastStatsSampleAt = now;
+      statsSample = options.cache
+        .stats()
+        .then((stats) => {
+          latestStats = stats;
+        })
+        .catch((error: unknown) => {
+          options.logger?.log({
+            error,
+            event: "generation.progress",
+            input: { cacheKey, fingerprint: options.fingerprint },
+            level: "warn",
+            marker: "[PROXY]",
+            output: { storageEstimate: { available: false } },
+            requestId: options.requestId,
+          });
+        })
+        .finally(() => {
+          statsSample = undefined;
+        });
+    }
     const progress = {
-      elapsedMs: performance.now() - startedAt,
+      elapsedMs: now - startedAt,
       stage,
+      ...progressStatsFields(latestStats),
       ...fields,
     } satisfies MediaProxyProgress;
     options.onProgress?.(progress);
@@ -417,45 +539,11 @@ export async function generateMediaProxy(
     });
   };
 
-  report("cache");
-  const cached = await options.cache.get(cacheKey);
-  if (cached) {
-    const stats = await options.cache.stats();
-    options.logger?.log({
-      event: "cache.hit",
-      input: { cacheKey, fingerprint: options.fingerprint, parameters },
-      level: "info",
-      marker: "[PROXY]",
-      output: stats,
-      requestId: options.requestId,
-    });
-    report("completed", {
-      cacheStatus: "hit",
-      inputHeight: cached.source.height,
-      inputWidth: cached.source.width,
-      outputBytes: cached.proxy.byteLength,
-      outputHeight: cached.proxy.height,
-      outputWidth: cached.proxy.width,
-    });
-    return {
-      cache: { ...stats, key: cacheKey, status: "hit" },
-      elapsedMs: performance.now() - startedAt,
-      manifest: cached,
-    };
-  }
-
-  options.logger?.log({
-    event: "cache.miss",
-    input: { cacheKey, fingerprint: options.fingerprint, parameters },
-    level: "info",
-    marker: "[PROXY]",
-    requestId: options.requestId,
-  });
-  const transaction = await options.cache.begin(cacheKey);
   const input = new Input({
     formats: ALL_FORMATS,
     source: browserSource(options.source),
   });
+  let transaction: ProxyCacheTransaction | undefined;
   let waveform: PcmWaveformSession | undefined;
 
   try {
@@ -475,12 +563,59 @@ export async function generateMediaProxy(
       (await input.computeDuration(
         tracks.audio ? [tracks.video, tracks.audio] : [tracks.video],
       ));
+    parameters = resolveProxyParameters(options.parameters, fullDuration);
+    cacheKey = await createProxyCacheKey(options.fingerprint, parameters);
     const durationSec = effectiveDuration(fullDuration, parameters);
     const dimensions = calculateProxyDimensions(
       inputWidth,
       inputHeight,
       parameters,
     );
+    report("cache", {
+      durationSec,
+      inputHeight,
+      inputWidth,
+      outputHeight: dimensions.height,
+      outputWidth: dimensions.width,
+    });
+    const cached = await options.cache.get(cacheKey);
+    if (cached) {
+      const stats = await options.cache.stats();
+      latestStats = stats;
+      options.logger?.log({
+        event: "cache.hit",
+        input: { cacheKey, fingerprint: options.fingerprint, parameters },
+        level: "info",
+        marker: "[PROXY]",
+        output: stats,
+        requestId: options.requestId,
+      });
+      report("completed", {
+        cacheStatus: "hit",
+        durationSec: cached.proxy.durationSec,
+        inputHeight: cached.source.height,
+        inputWidth: cached.source.width,
+        outputBytes: cached.proxy.byteLength,
+        outputHeight: cached.proxy.height,
+        outputWidth: cached.proxy.width,
+        pcmSampleCount: cached.diagnostics?.pcmSampleCount,
+        processedTimeSec: cached.proxy.durationSec,
+      });
+      return {
+        cache: { ...stats, key: cacheKey, status: "hit" },
+        elapsedMs: performance.now() - startedAt,
+        manifest: cached,
+      };
+    }
+
+    options.logger?.log({
+      event: "cache.miss",
+      input: { cacheKey, fingerprint: options.fingerprint, parameters },
+      level: "info",
+      marker: "[PROXY]",
+      requestId: options.requestId,
+    });
+    transaction = await options.cache.begin(cacheKey);
     options.logger?.log({
       event: "generation.started",
       input: {
@@ -498,6 +633,7 @@ export async function generateMediaProxy(
     });
 
     report("thumbnails", {
+      durationSec,
       inputHeight,
       inputWidth,
       outputHeight: dimensions.height,
@@ -530,17 +666,53 @@ export async function generateMediaProxy(
       parameters,
       transaction,
       waveform,
+      expectedSamples,
       report,
       options.signal,
     );
     report("keyframes", {
+      durationSec,
       outputBytes: encoded.outputBytes,
       processedTimeSec: durationSec,
     });
-    if (encoded.sampleCount !== expectedSamples) {
-      throw new Error(
-        `Decoded PCM sample count mismatch: expected ${expectedSamples}, received ${encoded.sampleCount}`,
-      );
+    const pcmDiagnostics = pcmSampleCountDiagnostics(
+      expectedSamples,
+      encoded.decodedSampleCount,
+      audioSampleRate,
+    );
+    if (pcmDiagnostics?.strategy === "fail") {
+      options.logger?.log({
+        event: "generation.failed",
+        input: { cacheKey, fingerprint: options.fingerprint, parameters },
+        level: "error",
+        marker: "[PROXY]",
+        output: { pcmSampleCount: pcmDiagnostics },
+        requestId: options.requestId,
+      });
+      throw new PcmSampleCountMismatchError(pcmDiagnostics);
+    }
+    if (pcmDiagnostics?.strategy === "pad-silence") {
+      const missingSamples = expectedSamples - encoded.waveformSampleCount;
+      if (missingSamples > 0) {
+        waveform.push(new Float32Array(missingSamples));
+        encoded.waveformSampleCount += missingSamples;
+      }
+    }
+    if (pcmDiagnostics) {
+      options.logger?.log({
+        event: "generation.progress",
+        input: { cacheKey, fingerprint: options.fingerprint, parameters },
+        level: "warn",
+        marker: "[PROXY]",
+        output: { pcmSampleCount: pcmDiagnostics },
+        requestId: options.requestId,
+      });
+      report("waveform", {
+        durationSec,
+        outputBytes: encoded.outputBytes,
+        pcmSampleCount: pcmDiagnostics,
+        processedTimeSec: durationSec,
+      });
     }
     const waveformResult = waveform.finish();
     await transaction.write("waveform.f32", waveformResult.data);
@@ -552,6 +724,9 @@ export async function generateMediaProxy(
       cacheKey,
       cover: images.cover,
       createdAt: new Date().toISOString(),
+      diagnostics: pcmDiagnostics
+        ? { pcmSampleCount: pcmDiagnostics }
+        : undefined,
       fingerprint: options.fingerprint,
       keyframes: encoded.keyframes,
       parameters,
@@ -583,9 +758,10 @@ export async function generateMediaProxy(
       },
     };
 
-    report("commit", { outputBytes: encoded.outputBytes });
+    report("commit", { durationSec, outputBytes: encoded.outputBytes });
     await transaction.commit(manifest);
     const stats = await options.cache.stats();
+    latestStats = stats;
     const elapsedMs = performance.now() - startedAt;
     options.logger?.log({
       durationMs: elapsedMs,
@@ -598,11 +774,14 @@ export async function generateMediaProxy(
     });
     report("completed", {
       cacheStatus: "miss",
+      durationSec,
       inputHeight,
       inputWidth,
       outputBytes: encoded.outputBytes,
       outputHeight: dimensions.height,
       outputWidth: dimensions.width,
+      pcmSampleCount: pcmDiagnostics,
+      processedTimeSec: durationSec,
     });
     return {
       cache: { ...stats, key: cacheKey, status: "miss" },
@@ -610,10 +789,9 @@ export async function generateMediaProxy(
       manifest,
     };
   } catch (error) {
-    if (!input.disposed) {
-      input.dispose();
+    if (transaction) {
+      await transaction.abort();
     }
-    await transaction.abort();
     const cancelled = options.signal?.aborted === true;
     options.logger?.log({
       durationMs: performance.now() - startedAt,
@@ -628,5 +806,8 @@ export async function generateMediaProxy(
     throw error;
   } finally {
     waveform?.dispose();
+    if (!input.disposed) {
+      input.dispose();
+    }
   }
 }

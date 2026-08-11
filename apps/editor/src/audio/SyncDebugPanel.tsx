@@ -83,6 +83,7 @@ function manifestFor(
       frameRate: 30,
       keyFrameIntervalSec: 2,
       maxHeight: 540,
+      maxThumbnailCount: 120,
       maxWidth: 960,
       thumbnailIntervalSec: 5,
       thumbnailWidth: 160,

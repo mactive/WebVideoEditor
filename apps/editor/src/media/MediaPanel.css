@@ -102,6 +102,10 @@
   font-size: 10px;
 }
 
+.media-panel__status span {
+  overflow-wrap: anywhere;
+}
+
 .media-panel__diagnosis {
   margin: 16px 0 0;
   color: #ffc6ad;
@@ -165,7 +169,13 @@
   gap: 16px;
 }
 
+.media-panel__result-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .media-panel__result-title span {
+  flex: 0 0 auto;
   color: #8494ff;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 9px;
@@ -179,6 +189,7 @@
 }
 
 .media-panel__results .media-panel__error {
+  overflow-wrap: anywhere;
   color: #ffc6ad;
 }
 
@@ -189,6 +200,7 @@
 .media-panel__add {
   margin-top: 14px;
   padding: 8px 12px;
+  max-width: 100%;
   color: #eef1ff;
   background: #39479a;
   border: 1px solid #6575d8;
@@ -196,6 +208,36 @@
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
+}
+
+.media-panel__add-strategy {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  color: #cdd5e3;
+  background: rgb(132 148 255 / 10%);
+  border: 1px solid rgb(132 148 255 / 28%);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.media-panel__add-strategy[data-preview-source="source"] {
+  color: #ffd9a8;
+  background: rgb(240 179 90 / 10%);
+  border-color: rgb(240 179 90 / 32%);
+}
+
+.media-panel__add-strategy strong {
+  color: #eef1ff;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.media-panel__add-strategy span {
+  overflow-wrap: anywhere;
 }
 
 .media-panel__results dl div {

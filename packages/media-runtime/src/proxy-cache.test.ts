@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { MemoryProxyCache, createProxyCacheKey } from "./proxy-cache";
 import {
   DEFAULT_PROXY_PARAMETERS,
+  LONG_VIDEO_PROXY_DURATION_SEC,
+  LONG_VIDEO_PROXY_PARAMETER_OVERRIDES,
   MEDIA_PROXY_RESULT_VERSION,
   calculateProxyDimensions,
   resolveProxyParameters,
@@ -85,6 +87,23 @@ describe("proxy dimensions and cache keys", () => {
     await expect(createProxyCacheKey("sha256:b", defaults)).resolves.not.toBe(
       await createProxyCacheKey("sha256:a", defaults),
     );
+  });
+
+  it("uses lightweight defaults for long videos while preserving explicit overrides", () => {
+    expect(
+      resolveProxyParameters({}, LONG_VIDEO_PROXY_DURATION_SEC),
+    ).toMatchObject(LONG_VIDEO_PROXY_PARAMETER_OVERRIDES);
+    expect(
+      resolveProxyParameters(
+        { frameRate: 24, maxThumbnailCount: 120 },
+        LONG_VIDEO_PROXY_DURATION_SEC,
+      ),
+    ).toMatchObject({
+      frameRate: 24,
+      maxThumbnailCount: 120,
+      thumbnailIntervalSec:
+        LONG_VIDEO_PROXY_PARAMETER_OVERRIDES.thumbnailIntervalSec,
+    });
   });
 });
 

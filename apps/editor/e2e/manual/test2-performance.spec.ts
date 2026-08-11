@@ -21,6 +21,13 @@ test("@manual test_2 streams, cancels cleanly, and reuses OPFS cache", async ({
       heap: { available: boolean; usedJSHeapSize?: number };
       stage: string;
     };
+    type ProxyProgress = {
+      durationSec?: number;
+      elapsedMs: number;
+      outputBytes?: number;
+      processedTimeSec?: number;
+      stage: string;
+    };
     type ProbeResult = {
       durationSec: number;
       fingerprint: string;
@@ -198,10 +205,15 @@ test("@manual test_2 streams, cancels cleanly, and reuses OPFS cache", async ({
       }
     } while (performance.now() < cancellationDeadline);
 
-    const first = await request<ProxyResult>("media.proxy.generate", {
-      fingerprint: probe.fingerprint,
-      parameters,
-    });
+    const firstProgress: ProxyProgress[] = [];
+    const first = await request<ProxyResult>(
+      "media.proxy.generate",
+      {
+        fingerprint: probe.fingerprint,
+        parameters,
+      },
+      (payload) => firstProgress.push(payload as ProxyProgress),
+    );
     const second = await request<ProxyResult>("media.proxy.generate", {
       fingerprint: probe.fingerprint,
       parameters,
@@ -219,6 +231,7 @@ test("@manual test_2 streams, cancels cleanly, and reuses OPFS cache", async ({
       cancellationStage,
       cancelled,
       first,
+      firstProgress,
       pageHeapBytes: pageMemory?.usedJSHeapSize,
       probe,
       probeElapsedMs,
@@ -257,6 +270,25 @@ test("@manual test_2 streams, cancels cleanly, and reuses OPFS cache", async ({
   expect(evidence.first.cache.status).toBe("miss");
   expect(evidence.first.manifest.proxy.durationSec).toBeLessThanOrEqual(2.1);
   expect(evidence.first.manifest.proxy.byteLength).toBeGreaterThan(10_000);
+  expect(evidence.firstProgress.length).toBeGreaterThan(0);
+  const progressWithDuration = evidence.firstProgress.filter(
+    (progress) => typeof progress.durationSec === "number",
+  );
+  const progressWithProcessedTime = evidence.firstProgress.filter(
+    (progress) => typeof progress.processedTimeSec === "number",
+  );
+  const maxProcessedTime = Math.max(
+    ...progressWithProcessedTime.map(
+      (progress) => progress.processedTimeSec ?? 0,
+    ),
+  );
+  expect(progressWithDuration.length).toBeGreaterThan(0);
+  expect(progressWithProcessedTime.length).toBeGreaterThan(0);
+  expect(maxProcessedTime).toBeGreaterThan(0);
+  expect(maxProcessedTime).toBeLessThanOrEqual(2.1);
+  expect(
+    evidence.firstProgress.some((progress) => (progress.outputBytes ?? 0) > 0),
+  ).toBe(true);
   expect(evidence.second.cache.status).toBe("hit");
   expect(evidence.second.elapsedMs).toBeLessThan(evidence.first.elapsedMs);
   expect(evidence.second.cache.temporaryEntries).toBe(0);
@@ -271,6 +303,8 @@ test("@manual test_2 streams, cancels cleanly, and reuses OPFS cache", async ({
       cancellationStage: evidence.cancellationStage,
       firstProxyMs: Math.round(evidence.first.elapsedMs),
       heapBytes: evidence.pageHeapBytes,
+      progressSamples: evidence.firstProgress.length,
+      progressMaxProcessedSec: maxProcessedTime,
       probeBytes: evidence.probe.read.uniqueBytesRead,
       probeMs: Math.round(evidence.probeElapsedMs),
       readRatio: evidence.probe.read.readRatio,

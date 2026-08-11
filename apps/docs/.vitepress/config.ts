@@ -57,6 +57,7 @@ export default withMermaid(
               link: "/pipeline/mediabunny-webcodecs",
             },
             { text: "代理 / OPFS / 缩略图 / 波形", link: "/pipeline/proxy" },
+            { text: "长视频 Proxy 性能策略", link: "/pipeline/long-video-proxy" },
             { text: "音频主时钟同步", link: "/pipeline/av-sync" },
             { text: "原素材高质量导出", link: "/pipeline/export" },
           ],

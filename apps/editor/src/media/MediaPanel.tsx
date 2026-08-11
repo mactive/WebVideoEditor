@@ -15,6 +15,7 @@ import {
   type MediaProbeRequest,
   type MediaProbeResult,
   type ProxyCacheStats,
+  type ProxyGenerationParameters,
   type QueueStats,
   type ScheduledTaskHandle,
 } from "@web-video-editor/media-runtime";
@@ -42,6 +43,30 @@ const TEST_ASSETS = [
   },
 ] as const;
 
+const LONG_PROXY_DURATION_SEC = 10 * 60;
+const PROXY_TIMEOUT_MIN_MS = 5 * 60_000;
+const PROXY_TIMEOUT_MAX_MS = 30 * 60_000;
+
+function proxyParametersFor(
+  result: MediaProbeResult,
+): Partial<ProxyGenerationParameters> | undefined {
+  if (result.durationSec < LONG_PROXY_DURATION_SEC) {
+    return undefined;
+  }
+  return {
+    frameRate: 15,
+    maxThumbnailCount: 120,
+    thumbnailIntervalSec: 30,
+  };
+}
+
+function proxyTimeoutMs(result: MediaProbeResult): number {
+  return Math.min(
+    PROXY_TIMEOUT_MAX_MS,
+    Math.max(PROXY_TIMEOUT_MIN_MS, result.durationSec * 250),
+  );
+}
+
 type ProbeItem = {
   error?: string;
   id: string;
@@ -52,10 +77,19 @@ type ProbeItem = {
   status: "failed" | "probing" | "ready";
 };
 
+export type TimelineAddContext = {
+  assetName: string;
+  cacheStatus: "hit" | "miss" | "pending";
+  isLongVideo: boolean;
+  previewSource: "proxy" | "source";
+  proxyStatus: ProxyProgressState["status"] | "not-started";
+  risk: string;
+};
+
 export type MediaPanelProps = {
   actionAvailability?: ActionAvailability;
   logHub?: LogHub;
-  onAddToTimeline?: (assetId: string) => void;
+  onAddToTimeline?: (assetId: string, context: TimelineAddContext) => void;
   onAssetImported?: (
     asset: Asset,
     result: MediaProbeResult,
@@ -97,6 +131,58 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
   }
   return `${Math.ceil(bytes / 1024)} KiB`;
+}
+
+function timelineAddContext(item: ProbeItem): TimelineAddContext | undefined {
+  if (!item.result) {
+    return undefined;
+  }
+  const proxyStatus = item.proxy?.status ?? "not-started";
+  const cacheStatus =
+    item.proxy?.result?.cache.status ??
+    item.proxy?.progress?.cacheStatus ??
+    "pending";
+  const proxyReady = proxyStatus === "ready";
+  const isLongVideo = item.result.durationSec >= LONG_PROXY_DURATION_SEC;
+  const previewSource = proxyReady ? "proxy" : "source";
+  let risk: string;
+  if (proxyReady && cacheStatus === "hit") {
+    risk = "Proxy cache hit，可直接使用 OPFS proxy 预览。";
+  } else if (proxyReady) {
+    risk = "Proxy 已就绪，添加后使用低分辨率 proxy 预览。";
+  } else if (proxyStatus === "queued" || proxyStatus === "running") {
+    risk = isLongVideo
+      ? "可立即添加，但当前使用 source fallback；长视频直解码 seek/播放可能较慢，proxy 将在后台继续生成。"
+      : "可立即添加，当前临时使用 source fallback；proxy 后台完成后会切换到 proxy。";
+  } else if (proxyStatus === "failed") {
+    risk =
+      "Proxy 生成失败；仍可添加，但会持续使用 source fallback，预览性能取决于原素材解码。";
+  } else if (proxyStatus === "cancelled") {
+    risk =
+      "Proxy 已取消；仍可添加，但会使用 source fallback，可直接重试代理。";
+  } else {
+    risk = "可立即添加，proxy 尚未开始回传状态时使用 source fallback。";
+  }
+  return {
+    assetName: item.name,
+    cacheStatus,
+    isLongVideo,
+    previewSource,
+    proxyStatus,
+    risk,
+  };
+}
+
+function proxyStatusText(context: TimelineAddContext): string {
+  const parts = [
+    `preview=${context.previewSource}`,
+    `proxy=${context.proxyStatus}`,
+    `cache=${context.cacheStatus}`,
+  ];
+  if (context.isLongVideo) {
+    parts.push("long-video");
+  }
+  return parts.join(" · ");
 }
 
 export function MediaPanel({
@@ -215,8 +301,11 @@ export function MediaPanel({
       MediaProxyProgress
     >(
       0,
-      { fingerprint: result.fingerprint },
-      { requestId, timeoutMs: 5 * 60_000 },
+      {
+        fingerprint: result.fingerprint,
+        parameters: proxyParametersFor(result),
+      },
+      { requestId, timeoutMs: proxyTimeoutMs(result) },
     );
     proxyTasksRef.current.set(id, task);
     setItems((current) =>
@@ -230,13 +319,21 @@ export function MediaPanel({
       ),
     );
     task.progress$.subscribe(({ payload, progress }) => {
+      if (!payload) {
+        return;
+      }
       setItems((current) =>
         current.map((item) =>
           item.id === id
             ? {
                 ...item,
                 proxy: {
-                  progress: payload,
+                  progress: {
+                    ...item.proxy?.progress,
+                    ...payload,
+                    elapsedMs: payload.elapsedMs,
+                    stage: payload.stage,
+                  },
                   ratio: progress.ratio,
                   status: "running",
                 },
@@ -469,6 +566,7 @@ export function MediaPanel({
             const audio = item.result?.audioTracks.find(
               (track) => track.trackId === item.result?.primaryAudioTrackId,
             );
+            const addContext = timelineAddContext(item);
             return (
               <li key={item.id} data-status={item.status}>
                 <div className="media-panel__result-title">
@@ -545,17 +643,30 @@ export function MediaPanel({
                         </dd>
                       </div>
                     </dl>
+                    {addContext ? (
+                      <div
+                        className="media-panel__add-strategy"
+                        data-preview-source={addContext.previewSource}
+                        data-proxy-status={addContext.proxyStatus}
+                      >
+                        <strong>{proxyStatusText(addContext)}</strong>
+                        <span>{addContext.risk}</span>
+                      </div>
+                    ) : null}
                     <button
                       className="media-panel__add"
                       data-testid={`add-${item.result.source.name}`}
                       onClick={() =>
                         onAddToTimeline?.(
                           mediaProbeToProjectAsset(item.result!).id,
+                          addContext!,
                         )
                       }
                       type="button"
                     >
-                      添加到时间线
+                      {addContext?.previewSource === "proxy"
+                        ? "添加到时间线"
+                        : "立即添加到时间线（source fallback）"}
                       {timelineAssetIds.includes(
                         mediaProbeToProjectAsset(item.result).id,
                       )
@@ -571,6 +682,11 @@ export function MediaPanel({
                         .get(item.id)
                         ?.cancel("Proxy cancelled by user")
                     }
+                    onRetry={() => {
+                      if (item.result) {
+                        generateProxy(item.id, item.result);
+                      }
+                    }}
                     state={item.proxy}
                   />
                 ) : null}
