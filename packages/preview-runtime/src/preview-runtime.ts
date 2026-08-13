@@ -31,6 +31,8 @@ type DecodeJob = {
   sourceTimeUs: number;
 };
 
+const PLAYBACK_STARTUP_MAX_VIDEO_LAG_US = 500_000;
+
 export type PreviewRuntimeOptions = {
   audio?: MediabunnyAudioPlayback;
   clock?: MonotonicProjectClock;
@@ -523,6 +525,10 @@ export class PreviewRuntime {
         frameRevision: job.projectRevision,
         frameSourceTimeUs: decoded.sourceTimeUs,
         masterTimeUs,
+        maxVideoLagUs:
+          job.origin === "playback" && this.snapshot.metrics.fps < 5
+            ? PLAYBACK_STARTUP_MAX_VIDEO_LAG_US
+            : undefined,
         requestedProjectTimeUs: job.playheadUs,
         requestedSourceTimeUs: job.sourceTimeUs,
       });

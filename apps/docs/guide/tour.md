@@ -64,4 +64,5 @@ CLI: Vite 输出 Local: http://localhost:5173/
 - 编辑器依赖版本：[apps/editor/package.json](/source/apps/editor/package.json.txt)
 - 核心用户路径测试：[apps/editor/e2e/task12-core.spec.ts](/source/apps/editor/e2e/task12-core.spec.ts.txt)
 
-从[总体架构与线程](/architecture/overview)开始按层阅读。
+从[总体架构与线程](/architecture/overview)开始按层阅读。媒体基础概念可先看
+[帧编码格式 RGB / YUV / YCbCr](/pipeline/frame-formats)。

@@ -28,6 +28,7 @@
     "test:e2e:core": "playwright test apps/editor/e2e/task12-core.spec.ts",
     "test:e2e:extended": "playwright test --grep-invert @manual",
     "test:e2e:test2": "playwright test apps/editor/e2e/manual/test2-performance.spec.ts --workers=1",
+    "test:e2e:test3": "playwright test apps/editor/e2e/manual/test3-seek-warmup.spec.ts --workers=1",
     "verify:wasm": "cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && pnpm test:rust && pnpm test && pnpm build:wasm && pnpm test:wasm",
     "verify": "node scripts/verify.mjs"
   },

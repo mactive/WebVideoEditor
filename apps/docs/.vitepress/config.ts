@@ -56,8 +56,15 @@ export default withMermaid(
               text: "Mediabunny 与 WebCodecs 数据流",
               link: "/pipeline/mediabunny-webcodecs",
             },
+            {
+              text: "帧编码格式 RGB / YUV / YCbCr",
+              link: "/pipeline/frame-formats",
+            },
             { text: "代理 / OPFS / 缩略图 / 波形", link: "/pipeline/proxy" },
-            { text: "长视频 Proxy 性能策略", link: "/pipeline/long-video-proxy" },
+            {
+              text: "长视频 Proxy 性能策略",
+              link: "/pipeline/long-video-proxy",
+            },
             { text: "音频主时钟同步", link: "/pipeline/av-sync" },
             { text: "原素材高质量导出", link: "/pipeline/export" },
           ],
