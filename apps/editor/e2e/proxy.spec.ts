@@ -165,6 +165,12 @@ test("generates, caches, reprobes, and plays the real test_1 proxy", async ({
     { timeout: 30_000 },
   );
   await expect(cachedItem.locator(".proxy-progress")).toContainText("HIT");
+
+  await page.getByRole("button", { name: "清理代理缓存" }).click();
+  await expect(page.locator(".media-panel__results > li")).toHaveCount(0);
+  await expect(page.locator(".media-panel__status")).toContainText(
+    "Runtime probes: 0",
+  );
 });
 
 test("generates and caches test_3 proxy despite a small PCM sample count mismatch", async ({

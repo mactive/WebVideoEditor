@@ -52,6 +52,10 @@ function formatMaybeBytes(bytes: number | undefined): string {
   return bytes === undefined ? "N/A" : formatBytes(bytes);
 }
 
+function formatPercent(ratio: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
+}
+
 function formatTime(seconds: number): string {
   const rounded = Math.max(0, Math.round(seconds));
   const hours = Math.floor(rounded / 3600);
@@ -60,6 +64,13 @@ function formatTime(seconds: number): string {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`
     : `${minutes}:${String(remaining).padStart(2, "0")}`;
+}
+
+function formatRate(bytes: number, elapsedMs: number): string {
+  if (bytes <= 0 || elapsedMs <= 0) {
+    return "等待写入";
+  }
+  return `${formatBytes(bytes / (elapsedMs / 1000))}/s`;
 }
 
 function dimensions(
@@ -89,6 +100,41 @@ function pcmDiagnosticsText(
   diagnostics: ProxyPcmSampleCountDiagnostics,
 ): string {
   return `expected ${diagnostics.expected} · received ${diagnostics.received} · delta ${diagnostics.delta} · tolerance ${diagnostics.tolerance} · ${diagnostics.strategy}`;
+}
+
+function stageDetail(progress: ExtendedProxyTelemetry | undefined): string {
+  switch (progress?.stage) {
+    case "cache":
+      return "检查 OPFS cache key";
+    case "thumbnails":
+      return "抽样生成 cover/thumbnails WebP";
+    case "transcode":
+      return "读取 sample 并写入 proxy.mp4";
+    case "waveform":
+      return "音频 PCM 聚合 waveform.f32";
+    case "keyframes":
+      return "汇总编码关键帧索引";
+    case "commit":
+      return "提交 OPFS manifest 和产物";
+    case "completed":
+      return "完成或命中缓存";
+    case undefined:
+      return "等待 worker 回传";
+  }
+}
+
+function keyframeText(result: MediaProxyResult | undefined): string {
+  const keyframes = result?.manifest.keyframes ?? [];
+  if (keyframes.length === 0) {
+    return "等待 keyframe 索引";
+  }
+  const first = keyframes[0]!;
+  const last = keyframes[keyframes.length - 1]!;
+  const interval =
+    keyframes.length > 1
+      ? (last.timestampSec - first.timestampSec) / (keyframes.length - 1)
+      : 0;
+  return `first ${formatTime(first.timestampSec)} seq ${first.sequenceNumber} ${formatBytes(first.byteLength)} · last ${formatTime(last.timestampSec)} seq ${last.sequenceNumber} ${formatBytes(last.byteLength)} · avg ${interval.toFixed(2)}s`;
 }
 
 function opfsStats(
@@ -121,7 +167,11 @@ function opfsStats(
   };
 }
 
-export function ProxyProgress({ onCancel, onRetry, state }: ProxyProgressProps) {
+export function ProxyProgress({
+  onCancel,
+  onRetry,
+  state,
+}: ProxyProgressProps) {
   const [mainThreadMetrics, setMainThreadMetrics] = useState<{
     heap: JsHeapMetrics;
     storage: StorageEstimateMetrics;
@@ -140,6 +190,12 @@ export function ProxyProgress({ onCancel, onRetry, state }: ProxyProgressProps) 
     progress?.processedTimeSec ?? result?.manifest.proxy.durationSec;
   const durationSec =
     progress?.durationSec ?? result?.manifest.source.durationSec;
+  const processedRatio =
+    processedTimeSec !== undefined &&
+    durationSec !== undefined &&
+    durationSec > 0
+      ? processedTimeSec / durationSec
+      : state.ratio;
   const opfs = opfsStats(result, progress);
   const storage =
     progress?.storageEstimate ??
@@ -189,7 +245,9 @@ export function ProxyProgress({ onCancel, onRetry, state }: ProxyProgressProps) 
       <dl>
         <div>
           <dt>阶段</dt>
-          <dd>{progress?.stage ?? state.status}</dd>
+          <dd>
+            {progress?.stage ?? state.status} · {stageDetail(progress)}
+          </dd>
         </div>
         <div>
           <dt>缓存</dt>
@@ -209,6 +267,13 @@ export function ProxyProgress({ onCancel, onRetry, state }: ProxyProgressProps) 
           <dt>输出</dt>
           <dd>{outputBytes > 0 ? formatBytes(outputBytes) : "等待编码"}</dd>
         </div>
+        <div>
+          <dt>进度</dt>
+          <dd>
+            pipeline {formatPercent(state.ratio)} · media{" "}
+            {formatPercent(processedRatio)}
+          </dd>
+        </div>
         {processedTimeSec !== undefined && durationSec !== undefined ? (
           <div>
             <dt>处理</dt>
@@ -220,6 +285,10 @@ export function ProxyProgress({ onCancel, onRetry, state }: ProxyProgressProps) 
         <div>
           <dt>耗时</dt>
           <dd>{(elapsedMs / 1000).toFixed(2)}s</dd>
+        </div>
+        <div>
+          <dt>写入速率</dt>
+          <dd>{formatRate(outputBytes, elapsedMs)}</dd>
         </div>
         <div>
           <dt>OPFS</dt>
@@ -260,6 +329,10 @@ export function ProxyProgress({ onCancel, onRetry, state }: ProxyProgressProps) 
                 {result.manifest.keyframes.length} keyframes ·{" "}
                 {result.manifest.waveform.bucketCount} waveform buckets
               </dd>
+            </div>
+            <div>
+              <dt>Keyframe</dt>
+              <dd>{keyframeText(result)}</dd>
             </div>
             <div>
               <dt>Cache</dt>

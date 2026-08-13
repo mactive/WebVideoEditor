@@ -1,7 +1,13 @@
 # Mediabunny 与 WebCodecs 数据流学习笔记
 
 这篇文章解释项目中为什么同时使用 Mediabunny 和 WebCodecs，以及 MP4、buffer、sample、
-`VideoFrame`、`AudioData`、encoded packet、OPFS manifest 在每一层的输入输出形态。
+`VideoFrame`、`AudioData`、encoded packet、OPFS（Origin Private File System）manifest
+在每一层的输入输出形态。
+
+OPFS 是浏览器给当前站点 origin 隔离出来的一块私有文件系统。它更像“浏览器托管的目录和文件”，
+不是 KV 存储器：代码通过 `navigator.storage.getDirectory()` 拿到根目录，再创建目录、写
+`proxy.mp4`、`manifest.json`、`waveform.f32`、缩略图等文件。它也不是一个单独的 2GB `Blob`；
+容量由浏览器 storage quota 管理，数据不能被普通操作系统路径直接访问。
 
 核心结论：
 
@@ -578,6 +584,120 @@ type ProxyManifest = {
 `keyframes` 是预览 seek 性能的关键。没有它，Worker 只能靠时间窗口或从较早位置找 sample；
 有它，就能快速定位到目标时间附近的可解码起点。
 
+### OPFS 里到底写了什么
+
+OPFS 不会给视频的**每个关键帧**都预渲染一张图片。当前 pipeline 写入的是两类不同的东西：
+
+| 产物                     | 是否每个关键帧都有                 | 生成方式                                                                    | 用途                           |
+| ------------------------ | ---------------------------------- | --------------------------------------------------------------------------- | ------------------------------ |
+| `proxy.mp4`              | 否，是一条完整低分辨率视频流       | 从原视频 `VideoSample` 重新编码成 H.264/AAC MP4                             | 预览 seek/播放时读取的轻量视频 |
+| `keyframes[]`            | 是索引，不是图片文件               | proxy 编码时从 encoded packet 里记录 `packet.type === "key"` 的时间戳和大小 | seek 时找最近可解码起点        |
+| `cover.webp`             | 否，只有一张封面                   | 按缩略图采样点取第一帧，用 `OffscreenCanvas` 转 WebP                        | 素材封面                       |
+| `thumbnail-0000.webp` 等 | 否，按 `thumbnailIntervalSec` 抽样 | `VideoSampleSink.samplesAtTimestamps(...)` 取少量时间点并绘制成 WebP        | 素材列表/时间轴缩略图          |
+| `waveform.f32`           | 和关键帧无关                       | 音频 PCM 进入 WASM 聚合为 min/max/rms bucket                                | 波形显示                       |
+| `manifest.json`          | 和关键帧无关                       | 写入上述产物的索引和参数                                                    | cache 命中、预览定位和 UI 展示 |
+
+默认参数下缩略图是按时间间隔抽样，例如每 5 秒一张；长视频会放宽为更少的缩略图。关键帧索引通常也可能
+每 2 秒一个，但它只是 `manifest.json` 里的结构化数组，不对应一张预渲染图片。
+
+### proxy.mp4 和原始 MP4 的区别
+
+`proxy.mp4` 是为了预览生成的低成本替身，不是原始素材的无损副本。
+
+| 项目      | 原始 MP4                              | OPFS `proxy.mp4`                              |
+| --------- | ------------------------------------- | --------------------------------------------- |
+| 来源      | 用户文件、测试 URL 或线上 URL         | media worker 后台生成                         |
+| 目标      | 最终导出仍使用原素材                  | 只服务预览 seek/播放                          |
+| 分辨率    | 保留素材原始分辨率，例如 1920×1080    | 按 proxy 参数缩小，例如 960×540               |
+| 帧率      | 保留原始轨道帧率                      | 默认 30fps，长视频可降到 15fps                |
+| 编码      | 原文件可能是 H.264/H.265/VP9/MJPEG 等 | 当前 proxy 固定走 H.264 video + AAC audio     |
+| 码率/体积 | 可能很大，`test_2.mp4` 接近 GB 级     | 明显更小，便于频繁 seek                       |
+| 关键帧    | 原文件结构不可控                      | 生成时按 `keyFrameIntervalSec` 控制并记录索引 |
+| 生命周期  | 用户原始素材，导出使用它              | 可删除、可重建的缓存                          |
+
+因此 proxy 的策略是：预览尽量读 `proxy.mp4`，导出仍回到 `originalSources` 读取原素材。
+
+### OPFS 存储结构、写入和释放
+
+当前 OPFS 根目录是：
+
+```text
+web-video-editor-media-cache-v1/
+```
+
+一次 cache miss 的写入采用事务目录，先写临时目录，再提交成正式目录：
+
+```text
+web-video-editor-media-cache-v1/
+  .tmp-proxy-<hash>-<uuid>/
+    proxy.mp4
+    cover.webp
+    thumbnail-0000.webp
+    thumbnail-0001.webp
+    waveform.f32
+    manifest.json
+```
+
+`commit(manifest)` 时会：
+
+1. 先把 `manifest.json` 写入临时目录。
+2. 如果正式目录 `proxy-<hash>/` 已存在，先删除旧目录。
+3. 创建正式目录 `proxy-<hash>/`。
+4. 把临时目录里的产物复制到正式目录。
+5. 在正式目录再写一份 `manifest.json`。
+6. 删除 `.tmp-*` 临时目录。
+
+提交后的结构类似：
+
+```text
+web-video-editor-media-cache-v1/
+  proxy-<hash>/
+    proxy.mp4
+    cover.webp
+    thumbnail-0000.webp
+    thumbnail-0001.webp
+    waveform.f32
+    manifest.json
+```
+
+读取时只信任正式目录。`cache.get(key)` 会先解析 `manifest.json`，再检查 manifest 引用的
+`proxy.mp4`、`cover.webp`、`waveform.f32`、全部 thumbnail 文件是否存在；如果缺文件或 manifest
+非法，会删除这个 cache entry，避免使用半损坏缓存。
+
+释放和清理有三种路径：
+
+- **取消或生成失败**：`generateMediaProxy` 捕获异常后调用 `transaction.abort()`，删除 `.tmp-*`
+  临时目录；`finally` 里释放 WASM waveform session，并 `input.dispose()`。
+- **启动或统计清理**：`OpfsProxyCache.create()` 会调用 `cleanup()`，删除遗留 `.tmp-*` 目录、
+  删除根目录下非目录垃圾项，并清理 manifest 无效的正式目录。
+- **用户点击“清理代理缓存”**：UI 调 `media.proxy.cache.clear`，worker 执行 `proxyCache.clear()`，
+  删除 `web-video-editor-media-cache-v1/` 下面的所有 entry；本次 UI 也会同步清空左侧 probe 列表。
+
+这里的“释放”主要是删除 OPFS 文件和 dispose 运行时对象。已经返回给 UI 的 JSON 元数据不会自动消失，
+所以 UI 层需要同步清空探测列表，避免出现“磁盘缓存已删，但面板还显示旧运行时记录”的错觉。
+
+### 为什么再次点击 3 个测试 MP4 会秒开
+
+如果 proxy 已经生成过，下一次导入相同素材、相同 proxy 参数时，`media.proxy.generate` 会先用
+素材 fingerprint 和参数计算 cache key，再查 OPFS proxy cache。命中后直接读取 `manifest.json`
+和已提交产物信息，UI 就会显示 `cache HIT`，不会重新转码、抽缩略图或重算 waveform。
+
+缓存位置不是一个“2GB Blob”。项目把产物写到浏览器 Origin Private File System（OPFS）：
+
+```text
+OPFS proxy cache
+  proxy.mp4
+  manifest.json
+  waveform.f32
+  cover.webp
+  thumbnail-0000.webp
+  thumbnail-0001.webp
+```
+
+浏览器会通过 `navigator.storage.estimate()` 暴露当前 origin 的 `usage/quota`。截图里
+`398.7 MiB / 10638.7 MiB` 表示当前站点已用约 399 MiB、可用配额约 10.4 GiB。不同浏览器、
+磁盘空间、站点持久化策略下 quota 会变化；这不是项目固定申请的 2 GiB Blob。
+
 ## 6. 加载到时间轴之前：probe 与 proxy 后台流程
 
 这里的“加载到时间轴之前”指用户已经选择了视频素材，但还没有点击“添加到时间线”。这时项目已经会做
@@ -709,6 +829,11 @@ probe 成功后主线程做三件事：
 此时素材已经可以添加到时间轴。即使 proxy 还没完成，预览也能走原素材 fallback，只是长视频频繁
 seek 可能更慢。
 
+“可立即添加，但当前使用 source fallback” 的意思是：Project clip 可以先创建，预览 Worker 会直接
+从原始 `mediaUrl` / `Blob` 取 sample 解码；等后台 proxy 完成后，主线程会把 runtime source 切到
+OPFS proxy。fallback 可以保证交互不中断，但长视频原素材通常分辨率更高、码率更大，而且没有已经
+生成好的 proxy keyframe manifest，所以频繁 seek 和播放冷启动可能更慢。
+
 ### proxy 生成阶段：抽缩略图、转低分 MP4、记录 keyframes
 
 probe 成功后 `MediaPanel` 会自动调 `generateProxy(id, result)`，向同一个 media worker 发：
@@ -753,7 +878,7 @@ fingerprint -> registry.get(source)
 - **keyframes 不是另一次抽帧渲染**：proxy 编码时，`VideoSampleSource` 的 `onEncodedPacket`
   回调看到 `packet.type === "key"` 就记录时间戳、大小和 sequenceNumber。
 
-proxy 进度会持续回主线程：
+proxy pipeline 进度会持续回主线程：
 
 ```json
 {
@@ -771,10 +896,28 @@ proxy 进度会持续回主线程：
     "stage": "transcode",
     "processedTimeSec": 32.5,
     "durationSec": 62.4,
-    "outputBytes": 18420331
+    "outputBytes": 18420331,
+    "cacheStatus": "miss",
+    "opfsCommittedBytes": 0,
+    "opfsTemporaryBytes": 18512000,
+    "temporaryEntries": 1
   }
 }
 ```
+
+完成后的 manifest 会包含具体 keyframe 信息。UI 展示的 keyframe 摘要可以来自这里：
+
+```json
+{
+  "timestampSec": 12,
+  "durationSec": 0.033333,
+  "byteLength": 19320,
+  "sequenceNumber": 360
+}
+```
+
+含义是：proxy.mp4 里第 360 个编码包是关键帧，时间戳 12s，帧时长约 33.3ms，压缩后包大小约
+19 KiB。预览 seek 到 12.5s 时可以从 12s 这个关键帧附近开始，而不是从文件开头扫起。
 
 proxy 完成后主线程把 runtime source 从 source fallback 更新成 OPFS proxy：
 

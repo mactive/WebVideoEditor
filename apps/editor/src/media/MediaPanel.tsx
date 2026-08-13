@@ -158,8 +158,7 @@ function timelineAddContext(item: ProbeItem): TimelineAddContext | undefined {
     risk =
       "Proxy 生成失败；仍可添加，但会持续使用 source fallback，预览性能取决于原素材解码。";
   } else if (proxyStatus === "cancelled") {
-    risk =
-      "Proxy 已取消；仍可添加，但会使用 source fallback，可直接重试代理。";
+    risk = "Proxy 已取消；仍可添加，但会使用 source fallback，可直接重试代理。";
   } else {
     risk = "可立即添加，proxy 尚未开始回传状态时使用 source fallback。";
   }
@@ -217,6 +216,12 @@ export function MediaPanel({
   const clientRef = useRef<WorkerClient | undefined>(undefined);
   const importQueueRef = useRef<BoundedTaskQueue | undefined>(undefined);
   const proxyQueueRef = useRef<BoundedTaskQueue | undefined>(undefined);
+  const probeTasksRef = useRef(
+    new Map<
+      string,
+      ScheduledTaskHandle<MediaProbeResult, MediaProbeProgress>
+    >(),
+  );
   const proxyTasksRef = useRef(
     new Map<
       string,
@@ -279,6 +284,7 @@ export function MediaPanel({
       clientRef.current = undefined;
       importQueueRef.current = undefined;
       proxyQueueRef.current = undefined;
+      probeTasksRef.current.clear();
       proxyTasks.clear();
       queueSubscription.unsubscribe();
       importQueueSubscription.unsubscribe();
@@ -403,6 +409,7 @@ export function MediaPanel({
         MediaProbeResult,
         MediaProbeProgress
       >(0, { source }, { requestId: `probe_${id}` });
+      probeTasksRef.current.set(id, task);
     } catch (error) {
       setItems((current) =>
         current.map((item) =>
@@ -414,7 +421,7 @@ export function MediaPanel({
       return;
     }
     task.progress$.subscribe(({ payload }) => {
-      if (!payload) {
+      if (!payload || !probeTasksRef.current.has(id)) {
         return;
       }
       setItems((current) =>
@@ -425,6 +432,9 @@ export function MediaPanel({
     });
     void task.result.then(
       (result) => {
+        if (!probeTasksRef.current.delete(id)) {
+          return;
+        }
         const asset = mediaProbeToProjectAsset(result);
         onAssetImported?.(asset, result, source);
         setItems((current) =>
@@ -435,6 +445,9 @@ export function MediaPanel({
         generateProxy(id, result);
       },
       (error: unknown) => {
+        if (!probeTasksRef.current.delete(id)) {
+          return;
+        }
         setItems((current) =>
           current.map((item) =>
             item.id === id
@@ -444,6 +457,30 @@ export function MediaPanel({
         );
       },
     );
+  };
+
+  const clearProxyCacheAndProbeList = () => {
+    for (const task of probeTasksRef.current.values()) {
+      task.cancel("Probe cancelled because proxy cache was cleared");
+    }
+    probeTasksRef.current.clear();
+    for (const task of proxyTasksRef.current.values()) {
+      task.cancel("Proxy cancelled because proxy cache was cleared");
+    }
+    proxyTasksRef.current.clear();
+    setItems([]);
+    setCacheStats(undefined);
+    const client = clientRef.current;
+    if (!client) {
+      return;
+    }
+    void client
+      .request<Record<string, never>, ProxyCacheStats>(
+        MEDIA_PROXY_CACHE_CLEAR_OPERATION,
+        0,
+        {},
+      )
+      .result.then(setCacheStats);
   };
 
   const selectFiles = (files: FileList | null) => {
@@ -534,19 +571,7 @@ export function MediaPanel({
         </span>
         <button
           disabled={!importEnabled}
-          onClick={() => {
-            const client = clientRef.current;
-            if (!client) {
-              return;
-            }
-            void client
-              .request<Record<string, never>, ProxyCacheStats>(
-                MEDIA_PROXY_CACHE_CLEAR_OPERATION,
-                0,
-                {},
-              )
-              .result.then(setCacheStats);
-          }}
+          onClick={clearProxyCacheAndProbeList}
           type="button"
         >
           清理代理缓存
