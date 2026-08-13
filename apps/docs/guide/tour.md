@@ -65,4 +65,5 @@ CLI: Vite 输出 Local: http://localhost:5173/
 - 核心用户路径测试：[apps/editor/e2e/task12-core.spec.ts](/source/apps/editor/e2e/task12-core.spec.ts.txt)
 
 从[总体架构与线程](/architecture/overview)开始按层阅读。媒体基础概念可先看
-[帧编码格式 RGB / YUV / YCbCr](/pipeline/frame-formats)。
+[帧编码格式 RGB / YUV / YCbCr](/pipeline/frame-formats)，预览取帧细节可看
+[预览 Worker 解码链路](/pipeline/preview-worker-decode)。

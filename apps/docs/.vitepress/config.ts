@@ -57,6 +57,10 @@ export default withMermaid(
               link: "/pipeline/mediabunny-webcodecs",
             },
             {
+              text: "预览 Worker 解码链路",
+              link: "/pipeline/preview-worker-decode",
+            },
+            {
               text: "帧编码格式 RGB / YUV / YCbCr",
               link: "/pipeline/frame-formats",
             },

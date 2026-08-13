@@ -8,6 +8,8 @@
 - **Mediabunny 负责容器层**：读取 MP4/File/Blob/URL/OPFS，解析轨道、时间戳、关键帧、sample table，并按时间吐出视频/音频 sample；输出阶段也负责把 encoded packet mux 回 MP4。
 - **WebCodecs 负责 codec 层**：把压缩视频/音频交给浏览器原生硬件优先解码，得到 `VideoFrame` / `AudioData`；导出时把 `VideoFrame` / `AudioData` 编码成 `EncodedVideoChunk` / `EncodedAudioChunk`。
 - **PixiJS / Canvas 负责渲染合成层**：接收 `VideoFrame` 或 Mediabunny `VideoSample`，和文字、滤镜、变换一起画到画布。
+- **线程由项目决定，不是库自动决定**：Mediabunny 本身是 JS 库，运行在调用它的上下文里。本项目把 probe/proxy/preview decode/export 放到 Worker；预览呈现仍在主线程 PixiJS，导出合成才在 Worker `OffscreenCanvas`。
+- **Mediabunny 支持按需读取，但不是所有阶段都只读少量字节**：probe 和 seek 可以利用 `BlobSource` / `UrlSource` 按需读；proxy 生成和导出需要遍历有效时长，会持续读取、解码和编码。
 
 ```mermaid
 flowchart LR
@@ -22,6 +24,61 @@ flowchart LR
   PACKET --> MUX["Mediabunny Output<br/>MP4 mux"]
   MUX --> OPFS["OPFS File"]
 ```
+
+## 0. 先澄清三个边界
+
+### VideoFrame 是统一对象，不是统一内存格式
+
+`VideoFrame` 是 WebCodecs 定义的浏览器原生对象。支持 WebCodecs 的浏览器都认识这个接口：
+
+```ts
+type VideoFrameShape = {
+  displayWidth: number;
+  displayHeight: number;
+  timestamp: number;
+  duration: number | null;
+  format: VideoPixelFormat | null;
+  colorSpace: VideoColorSpace;
+  copyTo(
+    destination: BufferSource,
+    options?: VideoFrameCopyToOptions,
+  ): Promise<PlaneLayout[]>;
+  close(): void;
+};
+```
+
+但统一的是 API 语义，不是底层像素内存。一个 `VideoFrame` 背后可能是 `NV12`、`I420`、
+`RGBA`，也可能是浏览器或硬件解码器持有的资源。项目可以把它交给 Canvas/PixiJS 渲染，也可以
+通过 `copyTo()` 显式复制成 buffer；预览路径为了减少复制，直接 transfer `VideoFrame`。
+
+### Mediabunny 做容器和 sample 重活，不是 JS H.264 解码器
+
+Mediabunny 在项目里的重活是：
+
+- 识别 MP4 容器、track、duration、codec 参数和 sample table。
+- 按时间从容器里取 `VideoSample` / `AudioSample`。
+- 记录或产出 keyframe 信息。
+- 把 WebCodecs encoder 输出的 encoded packet mux 回 MP4。
+- 适配 `BlobSource`、`UrlSource`、OPFS file 和输出 stream。
+
+真正的 H.264/AAC 解码和编码仍然主要交给浏览器 WebCodecs 或浏览器媒体栈。比如预览里
+`sample.toVideoFrame()` 返回的是 WebCodecs `VideoFrame`；导出里项目直接创建 `VideoEncoder`。
+
+### OffscreenCanvas 只在导出和 proxy 图片生成路径里后台使用
+
+本项目要分清两条路径：
+
+```text
+预览:
+preview.worker 解码 -> transfer VideoFrame -> 主线程 PixiPreviewRenderer -> document canvas
+
+导出:
+export.worker -> OffscreenCanvas 2D 合成 -> new VideoFrame(canvas) -> VideoEncoder -> MP4
+```
+
+所以“OffscreenCanvas 在 Worker 里做完再交给主线程”不是当前预览实现。当前预览 Worker 只负责
+取样和解码，主线程负责 PixiJS 呈现；导出 Worker 才在后台用 `OffscreenCanvas` 合成并直接编码，
+不会把每帧交给主线程显示。
 
 ## 1. MP4 容器输入
 
@@ -59,12 +116,12 @@ type BrowserMediaSource =
 
 ### Mediabunny Source 适配
 
-| 输入来源 | 项目适配器 | 用途 |
-| --- | --- | --- |
-| 本地 File / Blob | `BlobSource` | 用户手动选择素材 |
-| 测试资源 / URL | `UrlSource` | `/test_assets/*.mp4`，支持按需 Range 读取 |
-| Node CLI | `CustomSource` | `pnpm media:probe` 在 Node 环境按需读取文件 |
-| OPFS proxy | `BlobSource(await getOpfsProxyFile(...))` | 预览 Worker 读取已生成的代理 MP4 |
+| 输入来源         | 项目适配器                                | 用途                                        |
+| ---------------- | ----------------------------------------- | ------------------------------------------- |
+| 本地 File / Blob | `BlobSource`                              | 用户手动选择素材                            |
+| 测试资源 / URL   | `UrlSource`                               | `/test_assets/*.mp4`，支持按需 Range 读取   |
+| Node CLI         | `CustomSource`                            | `pnpm media:probe` 在 Node 环境按需读取文件 |
+| OPFS proxy       | `BlobSource(await getOpfsProxyFile(...))` | 预览 Worker 读取已生成的代理 MP4            |
 
 Mediabunny `Input` 的形态：
 
@@ -77,6 +134,48 @@ const input = new Input({
   }),
 });
 ```
+
+### 是否流式读取大文件
+
+可以把 Mediabunny 的读取理解为**按需随机读取**，不是先把完整 MP4 全部读进内存。项目给
+Source 配了 cache 上限：
+
+```ts
+new BlobSource(fileOrBlob, { maxCacheSize: 8 * 1024 * 1024 });
+
+new UrlSource(url, {
+  maxCacheSize: 8 * 1024 * 1024,
+  parallelism: 2,
+});
+```
+
+预览 Worker 读取 OPFS proxy 时 cache 更大一些：
+
+```ts
+new BlobSource(await getOpfsProxyFile(cacheKey, "proxy.mp4"), {
+  maxCacheSize: 16 * 1024 * 1024,
+});
+```
+
+这带来三个结论：
+
+- **probe 阶段通常只读元数据、track 和必要索引**。如果 MP4 的 `moov`、sample table、
+  codec description 等信息能快速定位，就不会把 900MB 文件完整读完。
+- **seek 阶段会按目标时间附近的 sample 范围读取**。有 proxy keyframe manifest 时，从目标时间
+  前最近关键帧开始；没有 manifest 时，本项目对原素材 fallback 使用 2 秒 lookback。
+- **proxy 生成和导出不是少量读取**。proxy 要生成缩略图、低分 MP4、keyframes、waveform；
+  导出要按工程时间线逐帧读原素材并编码，都会持续遍历有效时长。
+
+本地文件和线上文件的区别：
+
+| 来源                | Source                                    | 读取方式                                      | 关键限制                                                                    |
+| ------------------- | ----------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
+| 本地 File / Blob    | `BlobSource`                              | 浏览器对 `Blob.slice()` / File 做本地随机读取 | 无 HTTP Range；受本地文件句柄和浏览器内存/cache 策略影响                    |
+| 测试资源 / 线上 URL | `UrlSource`                               | HTTP 按需请求，项目设置 `parallelism: 2`      | 需要服务器支持 Range、CORS、正确 MIME/响应头；网络延迟会直接影响 probe/seek |
+| OPFS proxy          | `BlobSource(await getOpfsProxyFile(...))` | 从浏览器 Origin 私有文件系统读取已生成 proxy  | 依赖 proxy 已 commit；适合预览 seek，分辨率和码率低于原素材                 |
+
+因此“线上文件”和“本地文件”在上层都是 `BrowserMediaSource`，但 I/O 成本不同。线上 URL 真正高效
+依赖 Range 请求；本地 File 没有网络往返，但仍然不会自动把整个文件塞进 Redux 或主线程状态。
 
 ### 输出：素材探测结果
 
@@ -178,8 +277,18 @@ type PreviewDecodeRequest = {
   "frameRate": 30,
   "diagnosticLogs": false,
   "keyframes": [
-    { "timestampSec": 10, "durationSec": 0.033, "byteLength": 18432, "sequenceNumber": 300 },
-    { "timestampSec": 12, "durationSec": 0.033, "byteLength": 19320, "sequenceNumber": 360 }
+    {
+      "timestampSec": 10,
+      "durationSec": 0.033,
+      "byteLength": 18432,
+      "sequenceNumber": 300
+    },
+    {
+      "timestampSec": 12,
+      "durationSec": 0.033,
+      "byteLength": 19320,
+      "sequenceNumber": 360
+    }
   ]
 }
 ```
@@ -316,7 +425,10 @@ type VideoFrameShape = {
   format: VideoPixelFormat | null; // 例如 "I420"、"NV12"、"RGBA"
   colorSpace: VideoColorSpace;
   allocationSize(options?: VideoFrameCopyToOptions): number;
-  copyTo(destination: BufferSource, options?: VideoFrameCopyToOptions): Promise<PlaneLayout[]>;
+  copyTo(
+    destination: BufferSource,
+    options?: VideoFrameCopyToOptions,
+  ): Promise<PlaneLayout[]>;
   close(): void;
 };
 ```
@@ -341,15 +453,18 @@ type VideoFrameShape = {
 - 主线程呈现后要释放 lease，最终调用 `VideoFrame.close()`。
 - 如果 revision/generation/requestId 过期，直接 `frame.close()`，避免旧 seek 覆盖新画面。
 
+这一段的逐层输入输出和真实协议结构见
+[预览 Worker 解码链路](/pipeline/preview-worker-decode)。
+
 ## 4. Buffer、ArrayBuffer 与 Transferable
 
 项目里有三种容易混淆的二进制形态。
 
-| 形态 | 例子 | 是否可转移 | 用途 |
-| --- | --- | --- | --- |
-| `Blob` / `File` | 用户选择的 MP4 | 不直接转移所有权 | 作为 Mediabunny `BlobSource` 输入 |
-| `ArrayBuffer` | Worker payload、WASM 输入输出 | 可以作为 Transferable | 大块二进制跨线程传递 |
-| `TypedArray` | `Uint8Array`、`Float32Array` | view 本身不可 detached，底层 buffer 可转移 | PCM、waveform、packet bytes |
+| 形态            | 例子                          | 是否可转移                                 | 用途                              |
+| --------------- | ----------------------------- | ------------------------------------------ | --------------------------------- |
+| `Blob` / `File` | 用户选择的 MP4                | 不直接转移所有权                           | 作为 Mediabunny `BlobSource` 输入 |
+| `ArrayBuffer`   | Worker payload、WASM 输入输出 | 可以作为 Transferable                      | 大块二进制跨线程传递              |
+| `TypedArray`    | `Uint8Array`、`Float32Array`  | view 本身不可 detached，底层 buffer 可转移 | PCM、waveform、packet bytes       |
 
 ### ArrayBuffer 样例
 
@@ -437,8 +552,18 @@ type ProxyManifest = {
     "height": 540
   },
   "keyframes": [
-    { "timestampSec": 0, "durationSec": 0.033, "byteLength": 21033, "sequenceNumber": 0 },
-    { "timestampSec": 2, "durationSec": 0.033, "byteLength": 18455, "sequenceNumber": 60 }
+    {
+      "timestampSec": 0,
+      "durationSec": 0.033,
+      "byteLength": 21033,
+      "sequenceNumber": 0
+    },
+    {
+      "timestampSec": 2,
+      "durationSec": 0.033,
+      "byteLength": 18455,
+      "sequenceNumber": 60
+    }
   ],
   "waveform": {
     "path": "waveform.f32",
@@ -453,7 +578,473 @@ type ProxyManifest = {
 `keyframes` 是预览 seek 性能的关键。没有它，Worker 只能靠时间窗口或从较早位置找 sample；
 有它，就能快速定位到目标时间附近的可解码起点。
 
-## 6. AudioSample、AudioData 与 AAC 编码
+## 6. 加载到时间轴之前：probe 与 proxy 后台流程
+
+这里的“加载到时间轴之前”指用户已经选择了视频素材，但还没有点击“添加到时间线”。这时项目已经会做
+两类工作：先探测素材，再后台生成 proxy。
+
+### 主线程先排队，不直接解析 MP4
+
+`MediaPanel` 在主线程创建一个 `WorkerClient`，worker 入口是 `apps/editor/src/media/media.worker.ts`。
+同一个 media worker 注册了两个任务：
+
+```text
+media.probe
+media.proxy.generate
+```
+
+主线程侧有两个队列：
+
+| 队列          | 操作                   | concurrency | highWatermark | 作用                                    |
+| ------------- | ---------------------- | ----------: | ------------: | --------------------------------------- |
+| `importQueue` | `media.probe`          |           1 |             2 | 素材探测，产出 `MediaProbeResult`       |
+| `proxyQueue`  | `media.proxy.generate` |           1 |             2 | 低分 proxy、缩略图、keyframes、waveform |
+
+主线程发出的 probe 请求是 Worker 协议 JSON：
+
+```ts
+type MediaWorkerRequest<TPayload> = {
+  type: "request";
+  version: 1;
+  requestId: string;
+  projectRevision: number;
+  operation: string;
+  payload: TPayload;
+};
+```
+
+probe payload：
+
+```json
+{
+  "source": {
+    "kind": "file",
+    "name": "demo.mp4",
+    "blob": "[File object]",
+    "lastModified": 178...
+  }
+}
+```
+
+这里 `File` / `Blob` 可以 structured clone 给 Worker；Project JSON 不保存它。真正解析 MP4 的动作在
+Worker 里发生。
+
+### media.worker 的 probe 阶段
+
+Worker 收到 `media.probe` 后调用 `probeBrowserMedia(source)`：
+
+```text
+BrowserMediaSource
+  -> BlobSource / UrlSource
+  -> Mediabunny Input
+  -> container metadata / tracks / sample tables
+  -> primary video/audio selection
+  -> fingerprint
+  -> MediaProbeResult
+```
+
+这一阶段是在理解 MP4 文件结构，但不是把整部视频逐帧渲染出来。它主要读取：
+
+- 容器格式和时长。
+- 视频轨、音频轨、codec 参数、profile、分辨率、旋转、帧率。
+- sample table / keyframe 等可用于定位的索引信息。
+- 首选主视频轨和主音频轨。
+- 素材 fingerprint 和读取统计。
+
+probe 进度通过 Worker progress 消息回主线程：
+
+```json
+{
+  "type": "progress",
+  "version": 1,
+  "requestId": "probe_asset1",
+  "projectRevision": 0,
+  "progress": {
+    "stage": "tracks",
+    "completed": 2,
+    "total": 4,
+    "ratio": 0.5
+  },
+  "payload": {
+    "stage": "tracks",
+    "elapsedMs": 128
+  }
+}
+```
+
+probe 成功后，Worker 还会把原始 `BrowserMediaSource` 注册到 `MediaSourceRegistry`：
+
+```ts
+registry.register(result.fingerprint, source);
+```
+
+这是后续 proxy 生成的顺序依赖：`media.proxy.generate` 只带 fingerprint，不再重复传大对象；Worker
+必须先通过 probe 注册过 source，proxy 才能找到原始素材。
+
+### 主线程收到 probe 结果后做什么
+
+probe 成功后主线程做三件事：
+
+1. 把 `MediaProbeResult` 转成 Project `Asset`，通过 Command Bus 执行 `asset.add`。
+2. 把原始素材保存到运行时 `originalSources`，供导出使用。
+3. 生成一个直接预览 source，作为 proxy 未完成前的 fallback。
+
+直接预览 source 结构类似：
+
+```json
+{
+  "preview": {
+    "assetId": "asset-123",
+    "cacheKey": "source-sha256...",
+    "cacheStatus": "miss",
+    "frameRate": 30,
+    "height": 720,
+    "keyframes": [],
+    "mediaUrl": "blob:http://localhost:5173/...",
+    "width": 1280
+  }
+}
+```
+
+此时素材已经可以添加到时间轴。即使 proxy 还没完成，预览也能走原素材 fallback，只是长视频频繁
+seek 可能更慢。
+
+### proxy 生成阶段：抽缩略图、转低分 MP4、记录 keyframes
+
+probe 成功后 `MediaPanel` 会自动调 `generateProxy(id, result)`，向同一个 media worker 发：
+
+```json
+{
+  "operation": "media.proxy.generate",
+  "payload": {
+    "fingerprint": "sha256:...",
+    "parameters": {
+      "frameRate": 30,
+      "keyFrameIntervalSec": 2,
+      "maxWidth": 960,
+      "maxHeight": 540,
+      "thumbnailIntervalSec": 5,
+      "thumbnailWidth": 160,
+      "waveformBuckets": 512
+    }
+  }
+}
+```
+
+Worker 侧顺序是：
+
+```text
+fingerprint -> registry.get(source)
+  -> cache.get(cacheKey)
+  -> cache hit: 直接返回 manifest
+  -> cache miss:
+       begin OPFS transaction
+       createImages: VideoSampleSink.samplesAtTimestamps -> OffscreenCanvas -> WebP
+       transcode: VideoSampleSink.samples(0, duration) -> VideoSampleSource(avc) -> proxy.mp4
+       audio: AudioSampleSink.samples -> PCM -> WASM waveform -> waveform.f32
+       collect keyframes from encoded packets
+       commit manifest.json + artifacts
+```
+
+这里有两个容易混淆的点：
+
+- **缩略图是抽帧渲染**：`samplesAtTimestamps` 按 `thumbnailIntervalSec` 取少量帧，用
+  `OffscreenCanvas` 转成 WebP。
+- **keyframes 不是另一次抽帧渲染**：proxy 编码时，`VideoSampleSource` 的 `onEncodedPacket`
+  回调看到 `packet.type === "key"` 就记录时间戳、大小和 sequenceNumber。
+
+proxy 进度会持续回主线程：
+
+```json
+{
+  "type": "progress",
+  "version": 1,
+  "requestId": "proxy_asset1",
+  "projectRevision": 0,
+  "progress": {
+    "stage": "transcode",
+    "ratio": 0.42,
+    "completed": 0.42,
+    "total": 1
+  },
+  "payload": {
+    "stage": "transcode",
+    "processedTimeSec": 32.5,
+    "durationSec": 62.4,
+    "outputBytes": 18420331
+  }
+}
+```
+
+proxy 完成后主线程把 runtime source 从 source fallback 更新成 OPFS proxy：
+
+```json
+{
+  "preview": {
+    "assetId": "asset-123",
+    "cacheStatus": "hit",
+    "manifest": {
+      "cacheKey": "proxy-a1b2",
+      "proxy": { "path": "proxy.mp4", "width": 960, "height": 540 },
+      "keyframes": [{ "timestampSec": 0 }, { "timestampSec": 2 }]
+    }
+  },
+  "audio": {
+    "kind": "opfs-proxy",
+    "cacheKey": "proxy-a1b2",
+    "path": "proxy.mp4"
+  }
+}
+```
+
+如果素材已经在时间轴上，`PreviewPanel` 会通过 `runtime.setSources(sources)` 局部更新 source，
+后续 seek 使用 OPFS proxy；如果还没在时间轴上，这个 proxy source 会等待后续添加 clip 时使用。
+
+### 导入前链路时序图
+
+```mermaid
+sequenceDiagram
+  participant UI as 主线程 MediaPanel/App
+  participant W as media.worker.ts
+  participant MB as Mediabunny Input
+  participant OPFS as OPFS proxy cache
+  participant WASM as Rust WASM waveform
+
+  UI->>W: media.probe { source: File/URL }
+  W->>MB: BlobSource/UrlSource -> Input
+  MB-->>W: metadata / tracks / sample table
+  W-->>UI: progress metadata/tracks/fingerprint/completed
+  W-->>UI: success MediaProbeResult
+  UI->>UI: Command asset.add + runtime source fallback
+  W->>W: registry.register(fingerprint, source)
+
+  UI->>W: media.proxy.generate { fingerprint, parameters }
+  W->>OPFS: cache.get(cacheKey)
+  alt cache hit
+    OPFS-->>W: manifest.json
+    W-->>UI: success MediaProxyResult
+  else cache miss
+    W->>MB: samplesAtTimestamps for thumbnails
+    W->>OPFS: write cover.webp / thumbnails
+    W->>MB: samples(0, duration) for transcode
+    W->>WASM: push PCM -> waveform buckets
+    W->>OPFS: write proxy.mp4 / waveform.f32 / manifest.json
+    W-->>UI: progress thumbnails/transcode/waveform/keyframes/commit
+    W-->>UI: success MediaProxyResult
+  end
+```
+
+## 7. 添加到时间轴之后：seek 会联动哪些模块
+
+点击“添加到时间线”本身不解码视频。它只通过 Command Bus 往 Project JSON 增加一个 clip：
+
+```json
+{
+  "type": "clip.add",
+  "clip": {
+    "assetId": "asset-123",
+    "trackId": "video-track",
+    "timelineStartUs": 0,
+    "sourceStartUs": 0,
+    "sourceEndUs": 62400000
+  }
+}
+```
+
+真正开始取帧发生在预览面板收到 playhead 变化或 runtime 初始化时。
+
+### seek 的主线程动作
+
+用户拖动时间轴时，主线程顺序是：
+
+```text
+Timeline.onPlayheadChange
+  -> Redux session.playheadUs
+  -> PreviewPanel props.playheadUs
+  -> PreviewRuntime.seek(playheadUs)
+```
+
+`PreviewRuntime.seek()` 做这些事：
+
+1. clamp 到工程时长范围。
+2. `transportGeneration += 1`，让旧播放/旧 seek 结果自然过期。
+3. 停止当前动画帧和音频源：`audio.stop("seek-or-revision")`。
+4. 更新播放时钟：`clock.seek(clamped, project.revision)`。
+5. 调 `requestFrame(clamped)` 发起一次取帧。
+
+`requestFrame()` 会先用 Runtime Adapter 计算当前项目时间下哪个视频实体可见：
+
+```ts
+type RuntimeEvaluation = {
+  playheadUs: number;
+  revision: number;
+  video?: {
+    assetId: string;
+    entityId: string;
+    sourceTimeUs: number;
+  };
+};
+```
+
+如果当前时间没有视频 clip，只同步 UI 状态，不发 Worker decode。若有视频 clip，则构造 decode job：
+
+```ts
+type DecodeJob = {
+  generation: number;
+  origin: "seek" | "playback";
+  playheadUs: number;
+  projectRevision: number;
+  requestId: string;
+  source: PreviewSource;
+  sourceTimeUs: number;
+};
+```
+
+### 主线程到 preview.worker 的通信
+
+`PreviewDecoderClient` 把 decode job 转成 `PreviewDecodeRequest`：
+
+```json
+{
+  "type": "preview.request",
+  "version": 1,
+  "operation": "decode",
+  "requestId": "preview-seek-42",
+  "projectRevision": 8,
+  "generation": 3,
+  "cacheKey": "proxy-a1b2",
+  "sourceTimeUs": 12500000,
+  "frameRate": 30,
+  "diagnosticLogs": false,
+  "keyframes": [
+    {
+      "timestampSec": 12,
+      "durationSec": 0.033,
+      "byteLength": 19320,
+      "sequenceNumber": 360
+    }
+  ]
+}
+```
+
+preview worker 内部队列是：
+
+```ts
+{
+  concurrency: 1,
+  highWatermark: 1,
+  overflowPolicy: "replace-oldest"
+}
+```
+
+所以频繁拖动 seek 时，新请求会替换旧请求；旧请求如果已经解出帧，也会因为
+`requestId/generation/projectRevision` 不匹配而被关闭，不会覆盖最新画面。
+
+### preview.worker 的取帧动作
+
+Worker 收到请求后顺序是：
+
+```text
+PreviewDecodeRequest
+  -> nearestKeyframeUs(request)
+  -> decoderFor(cacheKey/mediaUrl)
+  -> VideoSampleSink.samples(decodeFromUs, target + frameDuration)
+  -> select sample near target
+  -> sample.toVideoFrame()
+  -> sample.close()
+  -> postMessage(preview.frame, [frame])
+```
+
+如果是 proxy source：
+
+```ts
+new BlobSource(await getOpfsProxyFile(cacheKey, "proxy.mp4"), {
+  maxCacheSize: 16 * 1024 * 1024,
+});
+```
+
+如果是 source fallback：
+
+```ts
+new UrlSource(mediaUrl, {
+  maxCacheSize: 16 * 1024 * 1024,
+  parallelism: 2,
+});
+```
+
+成功响应包含 JSON envelope 和 transferable `VideoFrame`：
+
+```json
+{
+  "type": "preview.frame",
+  "version": 1,
+  "requestId": "preview-seek-42",
+  "projectRevision": 8,
+  "generation": 3,
+  "decodeFromUs": 12000000,
+  "requestedSourceTimeUs": 12500000,
+  "sourceTimeUs": 12500000,
+  "decodeQueue": 0,
+  "frame": "[VideoFrame transferable]"
+}
+```
+
+### 主线程收到 VideoFrame 后如何呈现
+
+主线程收到 `preview.frame` 后再次检查：
+
+```text
+pending request exists?
+requestId still latest?
+generation still current?
+projectRevision still current?
+```
+
+不满足就直接 `frame.close()`。满足则把 frame 包成 lifecycle lease，交给 `PreviewRuntime.present()`。
+`present()` 会再做时间戳选择：
+
+- 如果帧相对音频/播放主时钟落后太多，就丢弃并可能请求 resync。
+- 如果帧可用，就调用 `PixiPreviewRenderer.present(frame, ...)`。
+- 无论呈现还是丢弃，最后都会 `decoded.release()`，实际关闭 `VideoFrame`。
+
+当前预览呈现路径在主线程：
+
+```ts
+context.drawImage(frame, x, y, width, height);
+frameSource.update();
+application.render();
+```
+
+所以 seek 的最终链路是：
+
+```mermaid
+sequenceDiagram
+  participant T as Timeline
+  participant P as PreviewPanel
+  participant R as PreviewRuntime
+  participant D as PreviewDecoderClient
+  participant W as preview.worker.ts
+  participant MB as Mediabunny
+  participant X as PixiPreviewRenderer
+
+  T->>P: onPlayheadChange(playheadUs)
+  P->>R: seek(playheadUs)
+  R->>R: stop audio / bump generation / evaluate project
+  R->>D: decode(source, sourceTimeUs, revision, requestId)
+  D->>W: preview.request JSON
+  W->>MB: InputVideoTrack + VideoSampleSink.samples(...)
+  MB-->>W: VideoSample
+  W->>W: toVideoFrame and close sample
+  W-->>D: preview.frame JSON + transferable VideoFrame
+  D->>D: stale check and track video-frame
+  D-->>R: DecodedPreviewFrame
+  R->>R: timestamp / revision / generation check
+  R->>X: present(VideoFrame)
+  X->>X: Canvas drawImage + Pixi render
+  R->>D: release decoded frame
+```
+
+## 8. AudioSample、AudioData 与 AAC 编码
 
 音频路径和视频类似，但输出对象是 `AudioData`。
 
@@ -468,10 +1059,13 @@ type AudioSampleLike = {
   sampleRate: number;
   numberOfChannels: number;
   numberOfFrames: number;
-  copyTo(destination: Float32Array, options: {
-    format: "f32-planar";
-    planeIndex: number;
-  }): void;
+  copyTo(
+    destination: Float32Array,
+    options: {
+      format: "f32-planar";
+      planeIndex: number;
+    },
+  ): void;
   trim(startFrame: number, endFrame: number): AudioSampleLike;
   close(): void;
 };
@@ -519,7 +1113,7 @@ const audioData = new AudioData({
 
 `AudioData` 进入 `AudioEncoder.encode(audioData)` 后也必须释放，不能长期保留。
 
-## 7. 导出：VideoFrame / AudioData 到 MP4
+## 9. 导出：VideoFrame / AudioData 到 MP4
 
 导出不使用 proxy。它重新读取原素材，按工程时间线逐帧取原始 sample，合成到
 `OffscreenCanvas`，再创建 `VideoFrame` 交给 `VideoEncoder`。
@@ -549,7 +1143,11 @@ type MediaExportRequest = {
   "sources": [
     {
       "assetId": "asset-test-2",
-      "source": { "kind": "test-asset", "name": "test_2.mp4", "url": "/test_assets/test_2.mp4" }
+      "source": {
+        "kind": "test-asset",
+        "name": "test_2.mp4",
+        "url": "/test_assets/test_2.mp4"
+      }
     }
   ]
 }
@@ -647,7 +1245,7 @@ type MediaExportResult = {
 }
 ```
 
-## 8. 为什么不能只用其中一个
+## 10. 为什么不能只用其中一个
 
 ### 只用 WebCodecs 不够
 
@@ -680,27 +1278,34 @@ Redux: pure JSON state only
 OPFS: proxy / waveform / exported mp4 files
 ```
 
-## 9. 生命周期与性能检查清单
+## 11. 生命周期与性能检查清单
 
 大文件卡顿时优先检查这些点：
 
-| 检查项 | 观察位置 | 正常现象 |
-| --- | --- | --- |
-| proxy 是否完成 | 媒体面板 `cache HIT/MISS`、OPFS 字节数 | 完成后预览 source 切到 OPFS proxy |
-| keyframes 是否存在 | proxy manifest `keyframes.length` | 大于 0，通常每 2 秒一个 |
-| VideoFrame 是否释放 | 预览面板 `activeResources / VideoFrame` | 播放停止后回落 |
-| decoder queue 是否堆积 | 预览面板 `Video Decoder active/queued` | queued 长期不增长 |
-| encode queue 是否背压 | 导出面板 `videoQueue/audioQueue` | 有峰值但能 dequeue |
-| 结构化日志是否过量 | 调试区日志开关 | 大文件排查时可关闭日志减压 |
+| 检查项                 | 观察位置                                | 正常现象                          |
+| ---------------------- | --------------------------------------- | --------------------------------- |
+| proxy 是否完成         | 媒体面板 `cache HIT/MISS`、OPFS 字节数  | 完成后预览 source 切到 OPFS proxy |
+| keyframes 是否存在     | proxy manifest `keyframes.length`       | 大于 0，通常每 2 秒一个           |
+| VideoFrame 是否释放    | 预览面板 `activeResources / VideoFrame` | 播放停止后回落                    |
+| decoder queue 是否堆积 | 预览面板 `Video Decoder active/queued`  | queued 长期不增长                 |
+| encode queue 是否背压  | 导出面板 `videoQueue/audioQueue`        | 有峰值但能 dequeue                |
+| 结构化日志是否过量     | 调试区日志开关                          | 大文件排查时可关闭日志减压        |
 
-## 10. 源码证据
+## 12. 源码证据
 
 - 架构图：[arch.md](/source/arch.md.txt)
+- 媒体面板队列与导入回调：[apps/editor/src/media/MediaPanel.tsx](/source/apps/editor/src/media/MediaPanel.tsx.txt)
+- 总编辑器素材、时间轴和预览 source 装配：[apps/editor/src/App.tsx](/source/apps/editor/src/App.tsx.txt)
+- Media Worker 任务注册：[apps/editor/src/media/media.worker.ts](/source/apps/editor/src/media/media.worker.ts.txt)
+- Media Worker 协议与 Host：[packages/media-runtime/src/worker-host.ts](/source/packages/media-runtime/src/worker-host.ts.txt)
+- Probe 任务注册和 source registry：[packages/media-runtime/src/media-probe-worker.ts](/source/packages/media-runtime/src/media-probe-worker.ts.txt)
+- Proxy 任务注册：[packages/media-runtime/src/media-proxy-worker.ts](/source/packages/media-runtime/src/media-proxy-worker.ts.txt)
 - 探测和主轨选择：[packages/media-runtime/src/probe.ts](/source/packages/media-runtime/src/probe.ts.txt)
 - 代理、关键帧、波形和 OPFS manifest：[packages/media-runtime/src/proxy-pipeline.ts](/source/packages/media-runtime/src/proxy-pipeline.ts.txt)
 - 预览 Worker Demux/Decode：[apps/editor/src/preview/preview.worker.ts](/source/apps/editor/src/preview/preview.worker.ts.txt)
+- Preview Runtime seek 与呈现：[packages/preview-runtime/src/preview-runtime.ts](/source/packages/preview-runtime/src/preview-runtime.ts.txt)
+- PixiJS 预览呈现：[packages/preview-runtime/src/pixi-renderer.ts](/source/packages/preview-runtime/src/pixi-renderer.ts.txt)
 - Preview 请求/响应协议：[packages/preview-runtime/src/decoder.ts](/source/packages/preview-runtime/src/decoder.ts.txt)
 - Preview source 和 metrics 类型：[packages/preview-runtime/src/types.ts](/source/packages/preview-runtime/src/types.ts.txt)
 - 导出 WebCodecs 编码与 MP4 mux：[apps/editor/src/export/export-pipeline.ts](/source/apps/editor/src/export/export-pipeline.ts.txt)
 - 二进制 transfer 语义：[packages/media-runtime/src/transfer.ts](/source/packages/media-runtime/src/transfer.ts.txt)
-
