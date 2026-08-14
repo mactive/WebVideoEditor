@@ -13,6 +13,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const docsRoot = join(root, "apps/docs");
 const distRoot = join(docsRoot, ".vitepress/dist");
 const checkDist = process.argv.includes("--dist");
+const vitepressBase = normalizeBase(process.env.VITEPRESS_BASE ?? "/");
 const output = new Console({
   stderr: process.stderr,
   stdout: process.stdout,
@@ -37,6 +38,29 @@ const documentedEvents = new Set();
 let checkedLinks = 0;
 let checkedCommands = 0;
 let checkedDiagrams = 0;
+
+function normalizeBase(value) {
+  if (!value || value === "/") {
+    return "/";
+  }
+  const withLeadingSlash = value.startsWith("/") ? value : `/${value}`;
+  return withLeadingSlash.endsWith("/")
+    ? withLeadingSlash
+    : `${withLeadingSlash}/`;
+}
+
+function removeVitepressBase(pathname) {
+  if (vitepressBase === "/") {
+    return pathname;
+  }
+  const baseWithoutSlash = vitepressBase.slice(0, -1);
+  if (pathname === baseWithoutSlash) {
+    return "/";
+  }
+  return pathname.startsWith(vitepressBase)
+    ? `/${pathname.slice(vitepressBase.length)}`
+    : pathname;
+}
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -553,7 +577,7 @@ async function validateBuiltSite() {
     const html = readFileSync(htmlPath, "utf8");
     for (const match of html.matchAll(/href="([^"]+)"/g)) {
       const href = match[1];
-      if (href?.startsWith("/source/")) {
+      if (href && removeVitepressBase(href).startsWith("/source/")) {
         builtSourceRoutes.add(href);
       }
     }
@@ -570,7 +594,7 @@ async function validateBuiltSite() {
     const pathname = decodeURI(
       new URL(request.url ?? "/", "http://127.0.0.1").pathname,
     );
-    const candidate = resolve(distRoot, `.${pathname}`);
+    const candidate = resolve(distRoot, `.${removeVitepressBase(pathname)}`);
     const fromDist = relative(distRoot, candidate);
     if (
       fromDist === ".." ||

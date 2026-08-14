@@ -2,6 +2,8 @@
 
 容器和 codec 是两层：Mediabunny 识别 MP4、按需读取 packet/sample，并组织 Output；
 WebCodecs（直接或经 Mediabunny sample API）负责硬件优先的帧/音频编解码。
+MP4 容器本身的 box、`moov`、sample table 和流式播放细节见
+[MP4 文件格式详解](/pipeline/mp4-format)。
 
 ```mermaid
 flowchart LR

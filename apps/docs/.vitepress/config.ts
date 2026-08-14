@@ -3,6 +3,7 @@ import { withMermaid } from "vitepress-plugin-mermaid";
 
 export default withMermaid(
   defineConfig({
+    base: process.env.VITEPRESS_BASE ?? "/",
     lang: "zh-CN",
     title: "浏览器音视频编辑学习 Demo",
     description: "从真实源码、测试和日志理解浏览器视频编辑器",
@@ -63,6 +64,10 @@ export default withMermaid(
             {
               text: "帧编码格式 RGB / YUV / YCbCr",
               link: "/pipeline/frame-formats",
+            },
+            {
+              text: "MP4 文件格式详解",
+              link: "/pipeline/mp4-format",
             },
             { text: "代理 / OPFS / 缩略图 / 波形", link: "/pipeline/proxy" },
             {

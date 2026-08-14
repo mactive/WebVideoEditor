@@ -417,6 +417,10 @@ export function App() {
         </div>
         <nav>
           <span>REV {project.revision}</span>
+          <a href="/docs/">文档</a>
+          <a href="/opfs" target="_blank" rel="noreferrer">
+            OPFS 查看器
+          </a>
           <a href="/mobx.html">MobX 对照实验</a>
           <a href="/sync-debug.html">A/V 独立调试</a>
         </nav>

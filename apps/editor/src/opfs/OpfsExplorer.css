@@ -1,0 +1,334 @@
+:root {
+  color: #e8ecf3;
+  background: #0b0d12;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 80% 6%, rgb(91 214 162 / 12%), transparent 28rem),
+    linear-gradient(#0b0d12, #0f1219);
+}
+
+button,
+a {
+  font: inherit;
+}
+
+.opfs-explorer {
+  width: min(1320px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 56px 0 40px;
+}
+
+.opfs-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #252b37;
+}
+
+.opfs-hero h1 {
+  margin: 0;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.opfs-hero p:not(.eyebrow) {
+  max-width: 760px;
+  margin: 18px 0 0;
+  color: #9ba4b5;
+  line-height: 1.7;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: #5bd6a2;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.opfs-hero nav {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.opfs-hero a,
+.opfs-hero button {
+  padding: 9px 12px;
+  color: #dfe4ed;
+  text-decoration: none;
+  background: #151922;
+  border: 1px solid #2e3544;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.opfs-hero button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.opfs-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 24px 0;
+}
+
+.opfs-summary span {
+  padding: 9px 12px;
+  color: #aab4c3;
+  background: #10141b;
+  border: 1px solid #293140;
+  border-radius: 999px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.opfs-section,
+.opfs-panel {
+  padding: 18px;
+  background: rgb(16 20 27 / 88%);
+  border: 1px solid #293140;
+  border-radius: 12px;
+}
+
+.opfs-section {
+  margin-bottom: 18px;
+}
+
+.opfs-section__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.opfs-section__heading h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
+.opfs-section__heading span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #657083;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.opfs-proxy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.opfs-proxy-grid article {
+  padding: 14px;
+  background: #0b0f15;
+  border: 1px solid #27303f;
+  border-radius: 9px;
+}
+
+.opfs-proxy-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #d9e0ec;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+dl,
+dd {
+  margin: 0;
+}
+
+.opfs-proxy-grid dl,
+.opfs-file-meta,
+.opfs-waveform-panel dl {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.opfs-proxy-grid dl div,
+.opfs-file-meta div,
+.opfs-waveform-panel dl div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 10px;
+}
+
+dt {
+  color: #596476;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+dd {
+  overflow-wrap: anywhere;
+  color: #aab4c3;
+  font-size: 12px;
+}
+
+.opfs-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.opfs-tree {
+  display: grid;
+  gap: 5px;
+  max-height: 72vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.opfs-tree li > span,
+.opfs-tree button {
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  color: #c6cfdd;
+  background: #0b0f15;
+  border: 1px solid #252d3a;
+  border-radius: 7px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+}
+
+.opfs-tree button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.opfs-tree button:hover {
+  border-color: #5bd6a2;
+}
+
+.opfs-tree li[data-kind="directory"] > span {
+  display: block;
+  color: #8494ff;
+  background: rgb(132 148 255 / 8%);
+}
+
+.opfs-tree small {
+  color: #687384;
+}
+
+.opfs-preview {
+  min-height: 520px;
+}
+
+.opfs-preview img,
+.opfs-preview video {
+  display: block;
+  max-width: 100%;
+  max-height: 62vh;
+  margin-top: 16px;
+  background: #05070a;
+  border: 1px solid #293140;
+  border-radius: 8px;
+}
+
+.opfs-preview pre {
+  max-height: 62vh;
+  margin: 16px 0 0;
+  padding: 14px;
+  overflow: auto;
+  color: #cbd4e4;
+  background: #070a0f;
+  border: 1px solid #293140;
+  border-radius: 8px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.opfs-waveform-panel h3 {
+  margin: 18px 0 8px;
+  color: #cbd4e4;
+  font-size: 12px;
+}
+
+.opfs-waveform {
+  display: block;
+  width: 100%;
+  height: 88px;
+  padding: 8px;
+  background: #070a0f;
+  border: 1px solid #293140;
+  border-radius: 8px;
+}
+
+.opfs-waveform line {
+  stroke: #334052;
+  stroke-width: 1;
+}
+
+.opfs-waveform rect {
+  fill: #5bd6a2;
+}
+
+.opfs-error {
+  margin: 18px 0;
+  padding: 12px 14px;
+  color: #ffc6ad;
+  background: rgb(233 130 114 / 10%);
+  border: 1px solid rgb(233 130 114 / 35%);
+  border-radius: 8px;
+}
+
+.opfs-muted {
+  color: #778294;
+  line-height: 1.7;
+}
+
+@media (max-width: 960px) {
+  .opfs-hero,
+  .opfs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .opfs-hero {
+    display: grid;
+  }
+
+  .opfs-proxy-grid {
+    grid-template-columns: 1fr;
+  }
+}

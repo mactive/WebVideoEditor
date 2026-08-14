@@ -13,6 +13,19 @@ const isolationHeaders = {
   "Cross-Origin-Embedder-Policy": "require-corp",
   "Cross-Origin-Opener-Policy": "same-origin",
 };
+const cloudflareHeaders = `/*
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Opener-Policy: same-origin
+  X-Content-Type-Options: nosniff
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/docs/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+`;
+const cloudflareRedirects = `/docs /docs/ 301
+`;
 
 type MiddlewareStack = {
   use(
@@ -169,14 +182,64 @@ function readonlyTestAssets(): Plugin {
   };
 }
 
+function cloudflarePagesStaticConfig(): Plugin {
+  return {
+    name: "cloudflare-pages-static-config",
+    generateBundle() {
+      this.emitFile({
+        fileName: "_headers",
+        source: cloudflareHeaders,
+        type: "asset",
+      });
+      this.emitFile({
+        fileName: "_redirects",
+        source: cloudflareRedirects,
+        type: "asset",
+      });
+    },
+  };
+}
+
+function opfsExplorerRoute(): Plugin {
+  const install = (middlewares: MiddlewareStack) => {
+    middlewares.use((request, _response, next) => {
+      if (!request.url) {
+        next();
+        return;
+      }
+      const url = new URL(request.url, "http://localhost");
+      if (url.pathname === "/opfs") {
+        request.url = `/opfs.html${url.search}`;
+      }
+      next();
+    });
+  };
+
+  return {
+    name: "opfs-explorer-route",
+    configurePreviewServer(server) {
+      install(server.middlewares);
+    },
+    configureServer(server) {
+      install(server.middlewares);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), readonlyTestAssets()],
+  plugins: [
+    react(),
+    opfsExplorerRoute(),
+    readonlyTestAssets(),
+    cloudflarePagesStaticConfig(),
+  ],
   publicDir: false,
   build: {
     rollupOptions: {
       input: {
         index: fileURLToPath(new URL("./index.html", import.meta.url)),
         mobx: fileURLToPath(new URL("./mobx.html", import.meta.url)),
+        opfs: fileURLToPath(new URL("./opfs.html", import.meta.url)),
         preview: fileURLToPath(new URL("./preview.html", import.meta.url)),
         syncDebug: fileURLToPath(new URL("./sync-debug.html", import.meta.url)),
       },
