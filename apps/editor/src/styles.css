@@ -381,6 +381,7 @@ footer a {
     minmax(620px, 0.95fr)
     minmax(420px, 1fr)
     minmax(250px, 270px);
+  align-items: stretch;
   gap: 10px;
   min-height: 570px;
   margin-bottom: 10px;
@@ -449,51 +450,85 @@ footer a {
 
 .editor__preview .preview-panel {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
+  height: auto;
   padding: 0;
 }
 
 .preview-panel--embedded {
   display: flex;
   flex-direction: column;
-  padding: 14px;
+  gap: 12px;
+  padding: 16px;
   background: #11151d;
   border: 1px solid #2b3341;
   border-radius: 10px;
 }
 
 .preview-panel__embedded-title {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 13px;
 }
 
 .preview-panel--embedded .preview-panel__workspace {
-  flex: 1;
+  flex: 1 1 auto;
   grid-template-columns: 1fr;
+  min-height: 0;
 }
 
-.preview-panel--embedded .preview-panel__stage,
+.preview-panel--embedded .preview-panel__stage {
+  min-height: clamp(260px, 30vw, 390px);
+  padding: 14px;
+}
+
 .preview-panel--embedded .preview-panel__canvas {
-  min-height: 360px;
+  min-height: clamp(230px, 28vw, 360px);
 }
 
 .preview-panel--embedded .preview-panel__canvas canvas {
   width: auto;
   max-width: 100%;
-  max-height: 430px;
+  max-height: min(42vh, 400px);
 }
 
 .preview-panel--embedded .preview-panel__controls {
-  grid-template-columns: auto auto auto auto minmax(100px, 1fr) auto;
-  padding: 9px;
+  grid-template-columns:
+    auto auto auto minmax(5rem, auto) minmax(120px, 1fr)
+    minmax(5rem, auto);
+  gap: 8px;
+  margin-top: 0;
+  padding: 10px;
+}
+
+.preview-panel--embedded .preview-panel__metrics-panel {
+  margin-top: 0;
+}
+
+.preview-panel--embedded .preview-panel__metrics-header {
+  padding: 8px 10px;
+}
+
+.preview-panel--embedded .preview-panel__metrics-summary {
+  font-size: 9px;
 }
 
 .preview-panel--embedded .preview-panel__metrics {
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.preview-panel--embedded .preview-panel__metrics div {
+.preview-panel--embedded .preview-panel__metrics > div {
+  min-width: 0;
+  padding: 10px;
+}
+
+.preview-panel--embedded .preview-panel__health-grid {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+}
+
+.preview-panel--embedded .preview-panel__health-grid span {
   padding: 8px;
 }
 
@@ -502,7 +537,7 @@ footer a {
 }
 
 .preview-panel--embedded .preview-panel__metrics dd {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .editor__debug {
@@ -572,7 +607,7 @@ footer a {
   border-left-color: #5bd6a2;
 }
 
-@media (max-width: 1320px) {
+@media (max-width: 1360px) {
   .editor__workspace {
     grid-template-columns: minmax(540px, 0.95fr) minmax(400px, 1fr);
   }
@@ -606,6 +641,31 @@ footer a {
   .editor__header nav {
     align-items: start;
     flex-direction: column;
+  }
+
+  .preview-panel--embedded {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .preview-panel--embedded .preview-panel__stage {
+    min-height: 240px;
+    padding: 12px;
+  }
+
+  .preview-panel--embedded .preview-panel__canvas {
+    min-height: 220px;
+  }
+
+  .preview-panel--embedded .preview-panel__controls {
+    grid-template-columns: minmax(64px, auto) minmax(120px, 1fr) minmax(
+        64px,
+        auto
+      );
+  }
+
+  .preview-panel--embedded .preview-panel__controls input {
+    grid-column: 2;
   }
 
   .preview-panel--embedded .preview-panel__metrics,

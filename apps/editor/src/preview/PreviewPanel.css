@@ -33,7 +33,7 @@
 .preview-panel__workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 245px;
-  gap: 16px;
+  gap: 18px;
 }
 
 .preview-panel__stage {
@@ -41,6 +41,7 @@
   display: grid;
   min-height: 300px;
   overflow: hidden;
+  padding: 16px;
   place-items: center;
   background: #05070b;
   border: 1px solid #2b3341;
@@ -109,7 +110,9 @@
 
 .preview-panel__controls {
   display: grid;
-  grid-template-columns: auto auto auto auto minmax(180px, 1fr) auto;
+  grid-template-columns:
+    auto auto auto minmax(5.5rem, auto) minmax(180px, 1fr)
+    minmax(5.5rem, auto);
   align-items: center;
   gap: 10px;
   margin-top: 14px;
@@ -120,6 +123,7 @@
 }
 
 .preview-panel__controls button {
+  min-height: 36px;
   padding: 8px 12px;
   color: #dfe5ef;
   background: #1a202b;
@@ -141,23 +145,102 @@
 }
 
 .preview-panel__controls input {
+  min-width: 0;
+  height: 28px;
   width: 100%;
   accent-color: #8494ff;
 }
 
-.preview-panel__metrics {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
+.preview-panel__metrics-panel {
   margin-top: 14px;
 }
 
-.preview-panel__metrics div {
+.preview-panel__metrics-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #11151d;
+  border: 1px solid #2b3341;
+  border-radius: 9px;
+}
+
+.preview-panel__metrics-summary {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 6px 14px;
+  color: #8d98a9;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.preview-panel__metrics-summary span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-panel__metrics-summary strong {
+  margin-right: 4px;
+  color: #dce2ec;
+  font-weight: 600;
+}
+
+.preview-panel__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.preview-panel__metrics[hidden] {
+  display: none;
+}
+
+.preview-panel__metrics > div {
   display: block;
   padding: 14px;
   background: #10141b;
   border: 1px solid #29303d;
   border-radius: 8px;
+}
+
+.preview-panel__metrics-health {
+  grid-column: 1 / -1;
+}
+
+.preview-panel__health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.preview-panel__health-grid span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  background: #0c1017;
+  border: 1px solid #242b37;
+  border-radius: 7px;
+}
+
+.preview-panel__health-grid strong {
+  color: #8d98a9;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preview-panel__health-grid small {
+  color: #707b8d;
+  font-size: 9px;
 }
 
 .preview-panel__metrics dt {
@@ -168,6 +251,20 @@
   color: #dce2ec;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.preview-panel__metrics-toggle {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 12px;
+  color: #dfe5ef;
+  background: #1a202b;
+  border: 1px solid #354052;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
 }
 
 @media (max-width: 850px) {
@@ -176,14 +273,60 @@
   }
 
   .preview-panel__controls {
-    grid-template-columns: repeat(3, auto);
+    grid-template-columns: minmax(64px, auto) minmax(120px, 1fr) minmax(
+        64px,
+        auto
+      );
   }
 
   .preview-panel__controls input {
-    grid-column: 1 / -1;
+    grid-column: 2;
   }
 
   .preview-panel__metrics {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .preview-panel {
+    width: min(100% - 24px, 1180px);
+    padding-top: 38px;
+  }
+
+  .preview-panel__stage {
+    min-height: 240px;
+    padding: 12px;
+  }
+
+  .preview-panel__canvas {
+    min-height: 220px;
+  }
+
+  .preview-panel__controls {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .preview-panel__controls button {
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .preview-panel__controls span {
+    text-align: center;
+  }
+
+  .preview-panel__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-panel__metrics-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preview-panel__metrics-summary {
+    flex-direction: column;
   }
 }

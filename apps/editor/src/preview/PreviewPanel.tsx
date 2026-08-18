@@ -79,6 +79,41 @@ function formatBytes(bytes: number | undefined): string {
   return `${Math.ceil(bytes / 1024)} KiB`;
 }
 
+function formatJsHeapMetrics(heap: JsHeapMetrics): string {
+  if (!heap.available) {
+    return "N/A";
+  }
+  return [
+    `used ${formatBytes(heap.usedJSHeapSize)}`,
+    `total ${formatBytes(heap.totalJSHeapSize)}`,
+    `limit ${formatBytes(heap.jsHeapSizeLimit)}`,
+  ].join(" · ");
+}
+
+function formatStorageMetrics(storage: StorageEstimateMetrics): string {
+  if (!storage.available) {
+    return "N/A";
+  }
+  return `usage ${formatBytes(storage.usageBytes)} / quota ${formatBytes(storage.quotaBytes)}`;
+}
+
+function isPreviewShortcutInputTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  if (target.closest("input, textarea, select, button")) {
+    return true;
+  }
+  if (target instanceof HTMLElement && target.isContentEditable) {
+    return true;
+  }
+  const editable = target.closest("[contenteditable]");
+  return (
+    editable instanceof HTMLElement &&
+    editable.getAttribute("contenteditable")?.toLowerCase() !== "false"
+  );
+}
+
 function initialSnapshot(project: ProjectDocument): PreviewRuntimeSnapshot {
   const profile = resolveQualityProfile(project, "preview");
   return {
@@ -146,6 +181,7 @@ export function PreviewPanel({
       storage: { available: false },
     }),
   );
+  const [metricsExpanded, setMetricsExpanded] = useState(true);
   const previewEnabled = actionAvailability?.enabled === true;
   const hasPreviewSources = sources.length > 0;
   const sourceKey = sources
@@ -318,14 +354,49 @@ export function PreviewPanel({
     }
   }, [playheadUs]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        !previewEnabled ||
+        !hasPreviewSources ||
+        !snapshot.ready ||
+        isPreviewShortcutInputTarget(event.target)
+      ) {
+        return;
+      }
+      const runtime = runtimeRef.current;
+      if (!runtime) {
+        return;
+      }
+
+      if (event.code === "Space" || event.key === " ") {
+        event.preventDefault();
+        if (runtime.getSnapshot().playing) {
+          runtime.pause();
+        } else {
+          runtime.play();
+        }
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        runtime.step(-1);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        runtime.step(1);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasPreviewSources, previewEnabled, snapshot.ready]);
+
   const runtime = runtimeRef.current;
   const effects = project.clips.flatMap((clip) => clip.effects);
   const videoDecodeQueue =
     snapshot.metrics.codecQueues.videoDecoder.applicationQueue;
   const audioDecodeQueue =
     snapshot.metrics.codecQueues.audioDecoder?.applicationQueue;
-  const heapLimit =
-    runtimeMetrics.heap.jsHeapSizeLimit ?? runtimeMetrics.heap.totalJSHeapSize;
   const sourceSummary = sources.map((source) => {
     const metadata = previewSourceMetadata(source);
     return {
@@ -335,6 +406,21 @@ export function PreviewPanel({
       metadata,
     };
   });
+  const sourceSummaryText =
+    sourceSummary.length > 0
+      ? sourceSummary
+          .map(
+            (source) =>
+              `${source.assetId}: ${source.kind}${source.kind === "source" ? " fallback" : ""} · cache ${source.cacheStatus} · ${source.metadata.width}×${source.metadata.height}`,
+          )
+          .join(" / ")
+      : "N/A";
+  const jsHeapSummaryText = formatJsHeapMetrics(runtimeMetrics.heap);
+  const storageSummaryText = formatStorageMetrics(runtimeMetrics.storage);
+  const videoDecodeQueueText = `${videoDecodeQueue.active}/${videoDecodeQueue.queued} · peak ${videoDecodeQueue.activePeak}/${videoDecodeQueue.queuedPeak} · HWM ${videoDecodeQueue.highWatermark} · bp ${videoDecodeQueue.backpressureCount}`;
+  const audioDecodeQueueText = audioDecodeQueue
+    ? `${audioDecodeQueue.active}/${audioDecodeQueue.queued} · peak ${audioDecodeQueue.activePeak}/${audioDecodeQueue.queuedPeak} · HWM ${audioDecodeQueue.highWatermark} · bp ${audioDecodeQueue.backpressureCount}`
+    : "N/A";
 
   return (
     <section
@@ -452,99 +538,109 @@ export function PreviewPanel({
         <span>{formatTime(snapshot.durationUs)}</span>
       </div>
 
-      <dl className="preview-panel__metrics" aria-label="预览指标">
-        <div>
-          <dt>Source</dt>
-          <dd data-testid="preview-source-mode">
-            {sourceSummary.length > 0
-              ? sourceSummary
-                  .map(
-                    (source) =>
-                      `${source.assetId}: ${source.kind}${source.kind === "source" ? " fallback" : ""} · cache ${source.cacheStatus} · ${source.metadata.width}×${source.metadata.height}`,
-                  )
-                  .join(" / ")
-              : "N/A"}
-          </dd>
+      <section className="preview-panel__metrics-panel" aria-label="预览指标">
+        <div className="preview-panel__metrics-header">
+          <div
+            className="preview-panel__metrics-summary"
+            data-testid="preview-metrics-summary"
+          >
+            <span>
+              <strong>Source</strong> {sourceSummaryText}
+            </span>
+            <span>
+              <strong>FPS</strong> {snapshot.metrics.fps}
+            </span>
+            <span>
+              <strong>JS Heap</strong> {jsHeapSummaryText}
+            </span>
+          </div>
+          <button
+            aria-controls="preview-metrics-details"
+            aria-expanded={metricsExpanded}
+            className="preview-panel__metrics-toggle"
+            data-testid="preview-metrics-toggle"
+            onClick={() => setMetricsExpanded((expanded) => !expanded)}
+            type="button"
+          >
+            {metricsExpanded ? "收起指标" : "展开指标"}
+          </button>
         </div>
-        <div>
-          <dt>JS Heap</dt>
-          <dd data-testid="runtime-js-heap">
-            {runtimeMetrics.heap.available
-              ? `${formatBytes(runtimeMetrics.heap.usedJSHeapSize)} / ${formatBytes(heapLimit)}`
-              : "N/A"}
-          </dd>
-        </div>
-        <div>
-          <dt>Storage</dt>
-          <dd data-testid="runtime-storage">
-            {runtimeMetrics.storage.available
-              ? `${formatBytes(runtimeMetrics.storage.usageBytes)} / ${formatBytes(runtimeMetrics.storage.quotaBytes)}`
-              : "N/A"}
-          </dd>
-        </div>
-        <div>
-          <dt>Video Decoder</dt>
-          <dd data-testid="runtime-video-decoder">
-            {videoDecodeQueue.active}/{videoDecodeQueue.queued} · peak{" "}
-            {videoDecodeQueue.activePeak}/{videoDecodeQueue.queuedPeak} · bp{" "}
-            {videoDecodeQueue.backpressureCount}
-          </dd>
-        </div>
-        <div>
-          <dt>Audio Decoder</dt>
-          <dd data-testid="runtime-audio-decoder">
-            {audioDecodeQueue
-              ? `${audioDecodeQueue.active}/${audioDecodeQueue.queued} · peak ${audioDecodeQueue.activePeak}/${audioDecodeQueue.queuedPeak} · bp ${audioDecodeQueue.backpressureCount}`
-              : "N/A"}
-          </dd>
-        </div>
-        <div>
-          <dt>预览分辨率</dt>
-          <dd data-testid="proxy-resolution">
-            {snapshot.metrics.width}×{snapshot.metrics.height}
-          </dd>
-        </div>
-        <div>
-          <dt>FPS</dt>
-          <dd data-testid="preview-fps">{snapshot.metrics.fps}</dd>
-        </div>
-        <div>
-          <dt>应用解码队列 / 内部队列</dt>
-          <dd data-testid="decode-queue">
-            {videoDecodeQueue.active}/{videoDecodeQueue.queued} · HWM{" "}
-            {videoDecodeQueue.highWatermark} / N/A
-          </dd>
-        </div>
-        <div>
-          <dt>Cache Hit</dt>
-          <dd>{percent(snapshot.metrics.cacheHitRate)}</dd>
-        </div>
-        <div>
-          <dt>丢帧 / 过期</dt>
-          <dd data-testid="dropped-frames">
-            {snapshot.metrics.droppedFrames} / {snapshot.metrics.staleFrames}
-          </dd>
-        </div>
-        <div>
-          <dt>活跃资源 / VideoFrame</dt>
-          <dd data-testid="active-resources">
-            {snapshot.metrics.activeResources} / {activeVideoFrames}
-          </dd>
-        </div>
-        <div>
-          <dt>时钟 / A/V drift</dt>
-          <dd data-testid="av-drift">
-            {snapshot.metrics.clockSource} /{" "}
-            {(snapshot.metrics.avDriftUs / 1_000).toFixed(1)}ms
-          </dd>
-        </div>
-        <div>
-          <dt>Timestamp drop / Resync</dt>
-          <dd data-testid="sync-drops">
-            {snapshot.metrics.timestampDrops} / {snapshot.metrics.resyncs}
-          </dd>
-        </div>
-      </dl>
+        <dl
+          className="preview-panel__metrics"
+          hidden={!metricsExpanded}
+          id="preview-metrics-details"
+        >
+          <div>
+            <dt>Source</dt>
+            <dd data-testid="preview-source-mode">{sourceSummaryText}</dd>
+          </div>
+          <div
+            className="preview-panel__metrics-health"
+            data-testid="preview-health-row"
+          >
+            <dt>内存 / 资源健康</dt>
+            <dd className="preview-panel__health-grid">
+              <span data-testid="runtime-js-heap">
+                <strong>页面 JS Heap</strong> {jsHeapSummaryText}
+                <small>非系统内存 · Worker heap N/A</small>
+              </span>
+              <span data-testid="runtime-storage">
+                <strong>Storage</strong> {storageSummaryText}
+              </span>
+              <span data-testid="active-resources">
+                <strong>活跃资源</strong> {snapshot.metrics.activeResources} ·
+                VideoFrame {activeVideoFrames}
+              </span>
+              <span data-testid="runtime-video-decoder">
+                <strong>Video Decode</strong> {videoDecodeQueueText}
+              </span>
+              <span data-testid="runtime-audio-decoder">
+                <strong>Audio Decode</strong> {audioDecodeQueueText}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>预览分辨率</dt>
+            <dd data-testid="proxy-resolution">
+              {snapshot.metrics.width}×{snapshot.metrics.height}
+            </dd>
+          </div>
+          <div>
+            <dt>FPS</dt>
+            <dd data-testid="preview-fps">{snapshot.metrics.fps}</dd>
+          </div>
+          <div>
+            <dt>应用解码队列 / 内部队列</dt>
+            <dd data-testid="decode-queue">
+              {videoDecodeQueue.active}/{videoDecodeQueue.queued} · HWM{" "}
+              {videoDecodeQueue.highWatermark} / N/A
+            </dd>
+          </div>
+          <div>
+            <dt>Cache Hit</dt>
+            <dd>{percent(snapshot.metrics.cacheHitRate)}</dd>
+          </div>
+          <div>
+            <dt>丢帧 / 过期</dt>
+            <dd data-testid="dropped-frames">
+              {snapshot.metrics.droppedFrames} / {snapshot.metrics.staleFrames}
+            </dd>
+          </div>
+          <div>
+            <dt>时钟 / A/V drift</dt>
+            <dd data-testid="av-drift">
+              {snapshot.metrics.clockSource} /{" "}
+              {(snapshot.metrics.avDriftUs / 1_000).toFixed(1)}ms
+            </dd>
+          </div>
+          <div>
+            <dt>Timestamp drop / Resync</dt>
+            <dd data-testid="sync-drops">
+              {snapshot.metrics.timestampDrops} / {snapshot.metrics.resyncs}
+            </dd>
+          </div>
+        </dl>
+      </section>
     </section>
   );
 }

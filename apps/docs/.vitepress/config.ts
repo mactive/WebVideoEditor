@@ -74,6 +74,10 @@ export default withMermaid(
               text: "长视频 Proxy 性能策略",
               link: "/pipeline/long-video-proxy",
             },
+            {
+              text: "预处理为什么让预览流畅",
+              link: "/pipeline/preprocess-smooth-preview",
+            },
             { text: "音频主时钟同步", link: "/pipeline/av-sync" },
             { text: "原素材高质量导出", link: "/pipeline/export" },
           ],

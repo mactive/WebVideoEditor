@@ -28,7 +28,9 @@ flowchart TD
 
 长视频不强制等待完整 proxy 完成后才能添加到时间线。小视频可直接添加；长视频允许立即
 添加并走 `source` fallback，但频繁 seek 或长时间编辑前推荐等待关键 proxy 可用，或先跑
-后台预处理。内存、Storage、WASM 和分段策略见[长视频 Proxy 性能策略](/pipeline/long-video-proxy)。
+后台预处理。预处理为何让预览更流畅、以及服务端 480p proxy + FFmpeg/WASM 这类架构对比见
+[预处理为什么让预览流畅](/pipeline/preprocess-smooth-preview)；内存、Storage、WASM 和分段策略见
+[长视频 Proxy 性能策略](/pipeline/long-video-proxy)。
 
 ## 导入前准备工作到底是什么
 
