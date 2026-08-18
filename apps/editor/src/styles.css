@@ -393,12 +393,17 @@ footer a {
 }
 
 .editor__media {
-  max-height: 690px;
+  display: flex;
+  align-self: stretch;
+  flex-direction: column;
+  min-height: 0;
   overflow: auto;
 }
 
 .editor__media .media-panel {
+  flex: 1 1 auto;
   margin: 0;
+  min-height: 100%;
   padding: 16px;
   border-radius: 10px;
 }
@@ -459,10 +464,13 @@ footer a {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
   background: #11151d;
   border: 1px solid #2b3341;
   border-radius: 10px;
+}
+
+.editor__preview .preview-panel.preview-panel--embedded {
+  padding: 18px;
 }
 
 .preview-panel__embedded-title {
@@ -478,7 +486,7 @@ footer a {
 
 .preview-panel--embedded .preview-panel__stage {
   min-height: clamp(260px, 30vw, 390px);
-  padding: 14px;
+  padding: 18px;
 }
 
 .preview-panel--embedded .preview-panel__canvas {
@@ -645,6 +653,9 @@ footer a {
 
   .preview-panel--embedded {
     gap: 10px;
+  }
+
+  .editor__preview .preview-panel.preview-panel--embedded {
     padding: 12px;
   }
 

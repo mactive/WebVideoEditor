@@ -570,10 +570,6 @@ export function PreviewPanel({
           hidden={!metricsExpanded}
           id="preview-metrics-details"
         >
-          <div>
-            <dt>Source</dt>
-            <dd data-testid="preview-source-mode">{sourceSummaryText}</dd>
-          </div>
           <div
             className="preview-panel__metrics-health"
             data-testid="preview-health-row"
@@ -598,6 +594,10 @@ export function PreviewPanel({
                 <strong>Audio Decode</strong> {audioDecodeQueueText}
               </span>
             </dd>
+          </div>
+          <div>
+            <dt>Source</dt>
+            <dd data-testid="preview-source-mode">{sourceSummaryText}</dd>
           </div>
           <div>
             <dt>预览分辨率</dt>
