@@ -6,16 +6,13 @@ import { resolveQualityProfile } from "./quality";
 import { runPreviewSystems, type RuntimeRenderTarget } from "./systems";
 import type { QualityProfile, RuntimeEntity, RuntimeEvaluation } from "./types";
 
-function trackOrder(project: ProjectDocument, trackId: string): number {
-  return project.tracks.find((track) => track.id === trackId)?.order ?? 0;
-}
-
 function compileEntities(
   project: ProjectDocument,
   profile: QualityProfile,
 ): RuntimeEntity[] {
   const scale = profile.width / project.canvas.width;
   const trackById = new Map(project.tracks.map((track) => [track.id, track]));
+  const renderOrder = (trackId: string) => trackById.get(trackId)?.order ?? 0;
   const clips = project.clips
     .filter((clip) => trackById.get(clip.trackId)?.kind === "video")
     .map((clip): RuntimeEntity => {
@@ -34,7 +31,7 @@ function compileEntities(
         id: `clip:${clip.id}`,
         kind: "video",
         render: {
-          order: trackOrder(project, clip.trackId),
+          order: renderOrder(clip.trackId),
           visible: false,
         },
         timeline: {
@@ -59,37 +56,39 @@ function compileEntities(
         },
       };
     });
-  const texts = project.texts.map((text): RuntimeEntity => ({
-    animation: { opacity: 0 },
-    effects: { definitions: [], resolved: [] },
-    id: `text:${text.id}`,
-    kind: "text",
-    render: {
-      order: trackOrder(project, text.trackId),
-      visible: false,
-    },
-    text: {
-      color: text.color,
-      fontSize: text.fontSize * scale,
-      value: text.text,
-    },
-    timeline: {
-      active: false,
-      endUs: text.endUs,
-      localTimeUs: 0,
-      sourceStartUs: 0,
-      startUs: text.startUs,
-    },
-    transform: {
-      height: 0,
-      rotationRad: (text.rotationDeg * Math.PI) / 180,
-      scaleX: text.scale,
-      scaleY: text.scale,
-      width: 0,
-      x: text.x * profile.width,
-      y: text.y * profile.height,
-    },
-  }));
+  const texts = project.texts
+    .filter((text) => trackById.get(text.trackId)?.kind === "text")
+    .map((text): RuntimeEntity => ({
+      animation: { opacity: 0 },
+      effects: { definitions: [], resolved: [] },
+      id: `text:${text.id}`,
+      kind: "text",
+      render: {
+        order: renderOrder(text.trackId),
+        visible: false,
+      },
+      text: {
+        color: text.color,
+        fontSize: text.fontSize * scale,
+        value: text.text,
+      },
+      timeline: {
+        active: false,
+        endUs: text.endUs,
+        localTimeUs: 0,
+        sourceStartUs: 0,
+        startUs: text.startUs,
+      },
+      transform: {
+        height: 0,
+        rotationRad: (text.rotationDeg * Math.PI) / 180,
+        scaleX: text.scale,
+        scaleY: text.scale,
+        width: 0,
+        x: text.x * profile.width,
+        y: text.y * profile.height,
+      },
+    }));
   return [...clips, ...texts];
 }
 

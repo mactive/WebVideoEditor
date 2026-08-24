@@ -1,4 +1,7 @@
-import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  projectContentEndUs,
+  type ProjectDocument,
+} from "@web-video-editor/domain";
 import {
   MediabunnyAudioPlayback,
   createMediabunnyDecoderQueueObservation,
@@ -62,6 +65,10 @@ function formatTime(timeUs: number): string {
   return `${(timeUs / 1_000_000).toFixed(2)}s`;
 }
 
+function projectDurationUs(project: ProjectDocument): number {
+  return Math.max(project.timeline.durationUs, projectContentEndUs(project));
+}
+
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
@@ -118,12 +125,7 @@ function initialSnapshot(project: ProjectDocument): PreviewRuntimeSnapshot {
   const profile = resolveQualityProfile(project, "preview");
   return {
     buffering: false,
-    durationUs: Math.max(
-      0,
-      ...project.clips.map(
-        (clip) => clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs,
-      ),
-    ),
+    durationUs: projectDurationUs(project),
     metrics: {
       activeResources: 0,
       activeVideoLayers: 0,

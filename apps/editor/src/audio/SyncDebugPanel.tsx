@@ -1,4 +1,8 @@
-import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+  PROJECT_SCHEMA_VERSION,
+  type ProjectDocument,
+} from "@web-video-editor/domain";
 import {
   MEDIA_PROXY_RESULT_VERSION,
   MediabunnyAudioPlayback,
@@ -153,7 +157,7 @@ function projectFor(
     id: `task-9-${name}`,
     name: `Task 9 ${name} A/V sync`,
     revision: TEST_ASSETS.findIndex((candidate) => candidate.name === name) + 1,
-    schemaVersion: 1,
+    schemaVersion: PROJECT_SCHEMA_VERSION,
     texts: [],
     tracks: [
       {
@@ -173,6 +177,12 @@ function projectFor(
         order: 1,
       },
     ],
+    timeline: {
+      durationUs,
+      defaultScale: {
+        pixelsPerSecond: DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+      },
+    },
     updatedAt: now,
   };
   return {

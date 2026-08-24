@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { VideoSample } from "mediabunny";
-import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+  PROJECT_SCHEMA_VERSION,
+  type ProjectDocument,
+} from "@web-video-editor/domain";
 import type { RuntimeEntity } from "@web-video-editor/preview-runtime";
 
 import {
@@ -8,6 +12,7 @@ import {
   canvasFilter,
   composeFrame,
   exportFrameCount,
+  liveTimelineClips,
   mixPlanarAudioIntoChunks,
   normalizedAudioTimestampUs,
   type MixedAudioChunk,
@@ -232,7 +237,7 @@ function audioProject(): ProjectDocument {
     id: "project-audio",
     name: "Audio Export",
     revision: 0,
-    schemaVersion: 1,
+    schemaVersion: PROJECT_SCHEMA_VERSION,
     texts: [],
     tracks: [
       {
@@ -268,6 +273,12 @@ function audioProject(): ProjectDocument {
         order: 3,
       },
     ],
+    timeline: {
+      durationUs: 2_000_000,
+      defaultScale: {
+        pixelsPerSecond: DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+      },
+    },
     updatedAt: "2026-08-09T00:00:00.000Z",
   };
 }
@@ -349,6 +360,54 @@ describe("export pipeline timing and shared effect mapping", () => {
     expect(audibleAudioClips(audioProject()).map((clip) => clip.id)).toEqual([
       "audio-a",
       "audio-b",
+    ]);
+  });
+
+  it("ignores clips left on deleted tracks before export source and audio selection", () => {
+    const project = audioProject();
+    project.assets.push({
+      durationUs: 10_000_000,
+      fingerprint: "sha256:deleted",
+      frameRate: 30,
+      hasAudio: true,
+      height: 1080,
+      id: "asset-deleted",
+      name: "deleted.mp4",
+      source: { kind: "test-asset", name: "deleted.mp4", size: 1 },
+      width: 1920,
+    });
+    project.clips.push(
+      {
+        assetId: "asset-deleted",
+        effects: [],
+        id: "video-deleted-track",
+        sourceEndUs: 1_000_000,
+        sourceStartUs: 0,
+        timelineStartUs: 0,
+        trackId: "deleted-video-track",
+      },
+      {
+        assetId: "asset-deleted",
+        effects: [],
+        id: "audio-deleted-track",
+        sourceEndUs: 1_000_000,
+        sourceStartUs: 0,
+        timelineStartUs: 0,
+        trackId: "deleted-audio-track",
+      },
+    );
+    project.tracks = project.tracks.filter(
+      (track) => track.id !== "audio-track-2",
+    );
+
+    expect(liveTimelineClips(project).map((clip) => clip.id)).toEqual([
+      "video-layer",
+      "audio-a",
+      "audio-muted",
+      "audio-no-source-track",
+    ]);
+    expect(audibleAudioClips(project).map((clip) => clip.id)).toEqual([
+      "audio-a",
     ]);
   });
 

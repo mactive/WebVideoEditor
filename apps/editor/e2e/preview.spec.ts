@@ -79,6 +79,7 @@ async function projectJson(page: Page) {
   const value = await page.getByTestId("project-json").textContent();
   return JSON.parse(value ?? "{}") as {
     clips: Array<{
+      id: string;
       assetId: string;
       sourceEndUs: number;
       sourceStartUs: number;
@@ -91,6 +92,7 @@ async function projectJson(page: Page) {
         y: number;
       };
     }>;
+    timeline: { durationUs: number };
     tracks: Array<{ id: string; kind: string; name: string; order: number }>;
   };
 }
@@ -109,6 +111,127 @@ async function fillInspectorNumber(page: Page, label: string, value: string) {
   await input.blur();
 }
 
+async function dragClipBy(
+  page: Page,
+  clipId: string,
+  delta: { x: number; y: number },
+) {
+  await page.evaluate(
+    ({ clipId, delta }) => {
+      const clip = document.querySelector(`[data-clip-id="${clipId}"]`);
+      if (!(clip instanceof HTMLElement)) {
+        throw new Error(`Clip ${clipId} is not visible`);
+      }
+      const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+      HTMLElement.prototype.setPointerCapture = () => undefined;
+      try {
+        const box = clip.getBoundingClientRect();
+        const start = {
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+        };
+        clip.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+        clip.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x + delta.x,
+            clientY: start.y + delta.y,
+            pointerId: 1,
+          }),
+        );
+        clip.dispatchEvent(
+          new PointerEvent("pointerup", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x + delta.x,
+            clientY: start.y + delta.y,
+            pointerId: 1,
+          }),
+        );
+      } finally {
+        HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+      }
+    },
+    { clipId, delta },
+  );
+}
+
+async function dragClipToTrack(
+  page: Page,
+  clipId: string,
+  trackTestId: string,
+) {
+  const clip = page.locator(`[data-clip-id="${clipId}"]`).first();
+  const [clipBox, trackBox] = await Promise.all([
+    clip.boundingBox(),
+    page.getByTestId(trackTestId).boundingBox(),
+  ]);
+  if (!clipBox || !trackBox) {
+    throw new Error(`Cannot drag ${clipId} to ${trackTestId}`);
+  }
+  await dragClipBy(page, clipId, {
+    x: 0,
+    y: trackBox.y + trackBox.height / 2 - (clipBox.y + clipBox.height / 2),
+  });
+}
+
+async function dragTrackHeader(
+  page: Page,
+  sourceLabel: string,
+  targetLabel: string,
+) {
+  await page.evaluate(
+    ({ sourceLabel, targetLabel }) => {
+      const source = document.querySelector(`[aria-label="${sourceLabel}"]`);
+      const target = document.querySelector(`[aria-label="${targetLabel}"]`);
+      if (!source || !target) {
+        throw new Error(
+          `Missing track header ${sourceLabel} or ${targetLabel}`,
+        );
+      }
+      const dataTransfer = new DataTransfer();
+      source.dispatchEvent(
+        new DragEvent("dragstart", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer,
+        }),
+      );
+      target.dispatchEvent(
+        new DragEvent("dragover", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer,
+        }),
+      );
+      target.dispatchEvent(
+        new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer,
+        }),
+      );
+      source.dispatchEvent(
+        new DragEvent("dragend", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer,
+        }),
+      );
+    },
+    { sourceLabel, targetLabel },
+  );
+}
+
 test("adds the same source to V1/V2/A1/A2 with distinct starts and transports all active layers", async ({
   page,
 }) => {
@@ -121,10 +244,9 @@ test("adds the same source to V1/V2/A1/A2 with distinct starts and transports al
   await fillInspectorNumber(page, "时间线起点（秒）", "0.2");
 
   await page.getByRole("button", { name: "新增视频轨" }).click();
-  await expect(page.getByRole("button", { name: "V2 视频 2" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByRole("button", { exact: true, name: "V2 视频 2" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await mediaItem.getByRole("button", { name: /添加到时间线/ }).click();
   await fillInspectorNumber(page, "时间线起点（秒）", "0.3");
   await expect(page.getByTestId("video-track-video-track")).toContainText(
@@ -140,10 +262,9 @@ test("adds the same source to V1/V2/A1/A2 with distinct starts and transports al
   await page.getByLabel("片段旋转").fill("18");
 
   await page.getByRole("button", { name: "新增音频轨" }).click();
-  await expect(page.getByRole("button", { name: "A2 音频 2" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByRole("button", { exact: true, name: "A2 音频 2" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await mediaItem.getByRole("button", { name: "添加音频到时间线" }).click();
   await fillInspectorNumber(page, "时间线起点（秒）", "0.4");
   await expect(page.locator("[data-clip-id]")).toHaveCount(4);
@@ -227,6 +348,84 @@ test("adds the same source to V1/V2/A1/A2 with distinct starts and transports al
     .poll(() =>
       previewSnapshot(page).then(
         (snapshot) => snapshot.metrics.audioActiveSources,
+      ),
+    )
+    .toBe(0);
+});
+
+test("manages long timeline scale, track order, cross-track moves, and deletion without stale preview references", async ({
+  page,
+}) => {
+  test.setTimeout(5 * 60_000);
+  await page.goto("/");
+  await importTestOneIntoTimeline(page);
+
+  await page.getByRole("button", { name: "10min" }).click();
+  await page.getByRole("slider", { name: "时间线缩放" }).fill("20");
+  await expect(page.getByText("20px/s")).toBeVisible();
+  await expect(
+    page.getByRole("slider", { name: "时间线播放头" }),
+  ).toHaveAttribute("max", "600000000");
+
+  let project = await projectJson(page);
+  expect(project.timeline.durationUs).toBe(600_000_000);
+  const clipId = project.clips[0]?.id;
+  if (!clipId) {
+    throw new Error("Expected imported clip");
+  }
+
+  await dragClipBy(page, clipId, { x: 260, y: 0 });
+  await expect
+    .poll(async () => {
+      const updated = await projectJson(page);
+      return (
+        updated.clips.find((clip) => clip.id === clipId)?.timelineStartUs ?? -1
+      );
+    })
+    .toBeGreaterThanOrEqual(12_000_000);
+
+  await page.getByRole("button", { name: "新增视频轨" }).click();
+  await dragTrackHeader(page, "轨道头 V2 视频 2", "轨道头 V1 视频");
+  project = await projectJson(page);
+  const orderByTrackId = new Map(
+    project.tracks.map((track) => [track.id, track.order]),
+  );
+  const reorderedVideoTrack = orderByTrackId.get("video-track-2");
+  const baseVideoTrack = orderByTrackId.get("video-track");
+  expect(reorderedVideoTrack).toBeDefined();
+  expect(baseVideoTrack).toBeDefined();
+  expect(reorderedVideoTrack!).toBeLessThan(baseVideoTrack!);
+
+  await dragClipToTrack(page, clipId, "video-track-video-track-2");
+  await expect
+    .poll(async () => {
+      const updated = await projectJson(page);
+      return updated.clips.find((clip) => clip.id === clipId)?.trackId;
+    })
+    .toBe("video-track-2");
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("包含 1 个内容");
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "删除轨道 V1 视频 2" }).click();
+
+  await expect
+    .poll(async () => {
+      const updated = await projectJson(page);
+      return {
+        clipTracks: updated.clips.map((clip) => clip.trackId),
+        trackIds: updated.tracks.map((track) => track.id),
+      };
+    })
+    .toEqual({
+      clipTracks: [],
+      trackIds: ["video-track", "audio-track", "text-track"],
+    });
+  await expect
+    .poll(() =>
+      previewSnapshot(page).then(
+        (snapshot) => snapshot.metrics.activeVideoLayers,
       ),
     )
     .toBe(0);

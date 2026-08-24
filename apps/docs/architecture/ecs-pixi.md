@@ -19,10 +19,15 @@ Scene Graph 只保留当前运行对象：每个 active video entity 一个独�
 可见 Text 节点和效果 Filter，不反向写 Project。预览 profile 最大 `960×540`；导出 profile
 使用 Project exportSettings，但复用同一 ECS 求值和效果归一化。
 
-多视频轨道时，`ProjectRuntimeAdapter.evaluate(...)` 返回按轨道 `order` 排序的
-`activeVideos` 和 `activeEntities`。order 小的轨道先绘制，order 大的轨道后绘制，因此 V2
-位于 V1 上方。每个视频层保留自己的 transform、effects 和 opacity；播放头、Seek、播放/暂停
+多视频和文字轨道时，`ProjectRuntimeAdapter.evaluate(...)` 返回按轨道 `order` 排序的
+`activeVideos` 和 `activeEntities`。order 小的轨道先绘制，order 大的轨道后绘制；这条规则来自
+Track 数据本身，不依赖 `tracks[]` / `clips[]` 数组位置，也不依赖 `video-track`、`text-track`
+这类默认 ID。每个视频层保留自己的 transform、effects 和 opacity；播放头、Seek、播放/暂停
 仍由同一个工程时间驱动所有层。
+
+revision 变化会触发 ECS rebuild。删除轨道时，Command Bus 会级联删除该轨道上的 Clip/Text；
+即使遇到迁移中间态或外部导入留下的孤儿引用，adapter 也只会编译仍指向现存同类型 track 的
+video/text entity，并释放上一 revision 中已经不再需要的 entity。
 
 音频轨道不进入 Pixi Scene Graph；PreviewRuntime 会从 Project 中筛出未静音的音频轨 Clip，
 按同一播放头交给音频播放模块调度，导出管线则按工程时间把所有可听音频片段混入同一 AAC 输出。

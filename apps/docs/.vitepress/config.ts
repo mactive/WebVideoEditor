@@ -36,6 +36,10 @@ export default withMermaid(
               text: "Project / Redux / Command / Undo",
               link: "/architecture/project-state",
             },
+            {
+              text: "多轨道编辑",
+              link: "/architecture/multitrack-editing",
+            },
             { text: "MobX 隔离对照", link: "/architecture/mobx" },
             { text: "ECS 与 PixiJS", link: "/architecture/ecs-pixi" },
           ],

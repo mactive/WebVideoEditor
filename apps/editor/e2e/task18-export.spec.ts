@@ -46,10 +46,9 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   await fill(page, "源出点（秒）", "2.5");
 
   await page.getByRole("button", { name: "新增视频轨" }).click();
-  await expect(page.getByRole("button", { name: "V2 视频 2" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByRole("button", { exact: true, name: "V2 视频 2" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await item.getByRole("button", { name: /添加到时间线/ }).click();
   await fill(page, "源入点（秒）", "12");
   await fill(page, "源出点（秒）", "14");
@@ -61,10 +60,9 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   await fill(page, "滤镜强度", "1");
 
   await page.getByRole("button", { name: "新增音频轨" }).click();
-  await expect(page.getByRole("button", { name: "A2 音频 2" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByRole("button", { exact: true, name: "A2 音频 2" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await item.getByRole("button", { name: "添加音频到时间线" }).click();
   await fill(page, "时间线起点（秒）", "0.6");
   await fill(page, "源入点（秒）", "12");
@@ -75,6 +73,8 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   await fill(page, "标题字号", "92");
   await fill(page, "标题颜色", "#ff2d55");
   await fill(page, "标题结束时间", "0.9");
+  await fill(page, "时间线总时长（秒）", "2.6");
+  await page.getByRole("button", { name: "应用总长" }).click();
 
   await page.getByRole("button", { name: "Project JSON", exact: true }).click();
   const project = JSON.parse(
@@ -100,11 +100,13 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   expect(
     project.tracks
       .filter((track) => track.kind === "video")
+      .sort((left, right) => left.order - right.order)
       .map((track) => track.id),
   ).toEqual(["video-track", "video-track-2"]);
   expect(
     project.tracks
       .filter((track) => track.kind === "audio")
+      .sort((left, right) => left.order - right.order)
       .map((track) => track.id),
   ).toEqual(["audio-track", "audio-track-2"]);
   const clipByTrack = new Map(

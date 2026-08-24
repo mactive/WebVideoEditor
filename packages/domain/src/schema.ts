@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const PROJECT_SCHEMA_VERSION = 1 as const;
+export const PROJECT_SCHEMA_VERSION = 2 as const;
+export const DEFAULT_TIMELINE_DURATION_US = 60_000_000;
+export const DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND = 80;
 
 const idSchema = z.string().trim().min(1);
 const timestampSchema = z.string().datetime({ offset: true });
@@ -158,6 +160,17 @@ export const exportSettingsSchema = z
   })
   .strict();
 
+export const timelineSchema = z
+  .object({
+    durationUs: microsecondsSchema,
+    defaultScale: z
+      .object({
+        pixelsPerSecond: z.number().positive(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const projectDocumentSchema = z
   .object({
     schemaVersion: z.literal(PROJECT_SCHEMA_VERSION),
@@ -172,6 +185,7 @@ export const projectDocumentSchema = z
     texts: z.array(textSchema),
     canvas: canvasSchema,
     exportSettings: exportSettingsSchema,
+    timeline: timelineSchema,
   })
   .strict();
 
@@ -184,4 +198,5 @@ export type Text = z.infer<typeof textSchema>;
 export type TextItem = Text;
 export type Canvas = z.infer<typeof canvasSchema>;
 export type ExportSettings = z.infer<typeof exportSettingsSchema>;
+export type TimelineSettings = z.infer<typeof timelineSchema>;
 export type ProjectDocument = z.infer<typeof projectDocumentSchema>;

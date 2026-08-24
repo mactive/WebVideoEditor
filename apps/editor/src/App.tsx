@@ -139,7 +139,28 @@ function resolveTargetMediaTrackId(
     : (tracks[0]?.id ?? null);
 }
 
-export function App() {
+function isEditorShortcutInputTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  if (target.closest("input, textarea, select, button")) {
+    return true;
+  }
+  if (target instanceof HTMLElement && target.isContentEditable) {
+    return true;
+  }
+  const editable = target.closest("[contenteditable]");
+  return (
+    editable instanceof HTMLElement &&
+    editable.getAttribute("contenteditable")?.toLowerCase() !== "false"
+  );
+}
+
+export type AppProps = {
+  initialProject?: ProjectDocument;
+};
+
+export function App({ initialProject }: AppProps = {}) {
   const [report, setReport] = useState<CapabilityReport>();
   const [failure, setFailure] = useState<string>();
   const [status, setStatus] = useState("导入真实素材后添加到时间线");
@@ -162,7 +183,10 @@ export function App() {
     () => new StructuredLogger(logHub, "editor-bootstrap"),
     [logHub],
   );
-  const editorStore = useMemo(() => createEditorStore(), []);
+  const editorStore = useMemo(
+    () => createEditorStore(initialProject),
+    [initialProject],
+  );
   const commandController = useMemo(
     () =>
       new ProjectCommandController(editorStore, {
@@ -461,6 +485,14 @@ export function App() {
   const addTitle = () => {
     const current = editorStore.getState().project.document;
     const startUs = editorStore.getState().session.playheadUs;
+    const targetTextTrackId =
+      [...current.tracks]
+        .filter((track) => track.kind === "text")
+        .sort((left, right) => left.order - right.order)[0]?.id ?? null;
+    if (!targetTextTrackId) {
+      setStatus("当前工程没有可添加标题的文字轨道");
+      return;
+    }
     const textId = `title-${crypto.randomUUID()}`;
     execute({
       text: {
@@ -472,7 +504,7 @@ export function App() {
         scale: 1,
         startUs,
         text: "输入标题",
-        trackId: "text-track",
+        trackId: targetTextTrackId,
         x: 0.5,
         y: 0.15,
       },
@@ -503,6 +535,71 @@ export function App() {
     }
   };
 
+  const reorderTracks = (trackIds: string[]) => {
+    execute({ trackIds, type: "track.reorder" });
+  };
+
+  const deleteTrack = (trackId: string, cascade: boolean) => {
+    const before = editorStore.getState();
+    const track = before.project.document.tracks.find(
+      (candidate) => candidate.id === trackId,
+    );
+    const committed = execute({
+      trackId,
+      type: "track.delete",
+      ...(cascade ? { cascade: true } : {}),
+    });
+    if (!committed) {
+      return;
+    }
+
+    const nextProject = editorStore.getState().project.document;
+    if (
+      before.session.selectedClipId &&
+      !nextProject.clips.some(
+        (clip) => clip.id === before.session.selectedClipId,
+      )
+    ) {
+      editorStore.dispatch(clipSelected(null));
+    }
+    if (
+      before.session.selectedTextId &&
+      !nextProject.texts.some(
+        (text) => text.id === before.session.selectedTextId,
+      )
+    ) {
+      editorStore.dispatch(textSelected(null));
+    }
+    editorStore.dispatch(
+      targetVideoTrackSelected(
+        resolveTargetMediaTrackId(
+          nextProject,
+          "video",
+          before.session.targetVideoTrackId,
+        ),
+      ),
+    );
+    editorStore.dispatch(
+      targetAudioTrackSelected(
+        resolveTargetMediaTrackId(
+          nextProject,
+          "audio",
+          before.session.targetAudioTrackId,
+        ),
+      ),
+    );
+
+    const nextDurationUs = projectDurationUs(nextProject);
+    if (before.session.playheadUs > nextDurationUs) {
+      editorStore.dispatch(playheadChanged(nextDurationUs));
+    }
+    setStatus(
+      track
+        ? `已删除轨道 ${track.name}${cascade ? " 及其内容" : ""}`
+        : "已删除轨道",
+    );
+  };
+
   const undo = () => {
     commandController.undo();
     setStatus("已 Undo");
@@ -514,6 +611,9 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditorShortcutInputTarget(event.target)) {
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) {
@@ -601,11 +701,13 @@ export function App() {
         onAddTitle={addTitle}
         onAddVideoTrack={() => addMediaTrack("video")}
         onDelete={deleteSelected}
+        onDeleteTrack={deleteTrack}
         onEdit={(edit, transactionId) => execute(edit, transactionId)}
         onPlayheadChange={(nextPlayheadUs) =>
           editorStore.dispatch(playheadChanged(nextPlayheadUs))
         }
         onRedo={redo}
+        onReorderTracks={reorderTracks}
         onSelectClip={(clipId) => editorStore.dispatch(clipSelected(clipId))}
         onSelectTargetAudioTrack={(trackId) =>
           editorStore.dispatch(targetAudioTrackSelected(trackId))
@@ -614,6 +716,9 @@ export function App() {
           editorStore.dispatch(targetVideoTrackSelected(trackId))
         }
         onSelectText={(textId) => editorStore.dispatch(textSelected(textId))}
+        onTimelineDurationChange={(durationUs) =>
+          execute({ durationUs, type: "timeline.duration.set" })
+        }
         onSplit={splitSelected}
         onUndo={undo}
         playheadUs={playheadUs}

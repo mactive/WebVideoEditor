@@ -1,10 +1,34 @@
-import { PROJECT_SCHEMA_VERSION, type ProjectDocument } from "./schema";
+import {
+  DEFAULT_TIMELINE_DURATION_US,
+  DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+  PROJECT_SCHEMA_VERSION,
+  type ProjectDocument,
+} from "./schema";
 
 export type CreateProjectOptions = {
   id: string;
   name: string;
   now?: string;
 };
+
+export function clipDurationUs(clip: ProjectDocument["clips"][number]): number {
+  return clip.sourceEndUs - clip.sourceStartUs;
+}
+
+export function projectContentEndUs(
+  project: Pick<ProjectDocument, "clips" | "texts">,
+): number {
+  const clipEnd = project.clips.reduce(
+    (maximum, clip) =>
+      Math.max(maximum, clip.timelineStartUs + clipDurationUs(clip)),
+    0,
+  );
+  const textEnd = project.texts.reduce(
+    (maximum, text) => Math.max(maximum, text.endUs),
+    0,
+  );
+  return Math.max(clipEnd, textEnd);
+}
 
 export function createProjectDocument({
   id,
@@ -60,6 +84,12 @@ export function createProjectDocument({
       audioCodec: "aac",
       videoBitrate: 8_000_000,
       audioBitrate: 192_000,
+    },
+    timeline: {
+      durationUs: DEFAULT_TIMELINE_DURATION_US,
+      defaultScale: {
+        pixelsPerSecond: DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+      },
     },
   };
 }

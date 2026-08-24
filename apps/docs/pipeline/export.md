@@ -20,15 +20,25 @@ flowchart LR
   MUX --> OPFS[".tmp requestId -> final MP4"]
 ```
 
+导出总时长使用工程语义总长：`max(Project.timeline.durationUs, 内容末尾)`。时间线 UI 的最小显示
+时长只用于让短工程可操作，不参与导出帧数、时间戳或音频混音计算；缩放也只影响编辑器像素密度和
+横向滚动。
+
 视频按 export frameRate 遍历工程时间，ECS 找到当前所有 active video Clip、Title 和 Effect。
 Export Worker 为每个 active video entity 从原素材读取对应 `VideoSample`，再按
 `activeEntities` 的 render order 在 OffscreenCanvas 上合成；order 小的轨道先画，order 大的
-轨道后画，因此 V2 会叠在 V1 之上。每个视频层独立应用自己的位置、缩放、旋转、滤镜和 opacity；
-每个 VideoFrame 编码后立即 close。
+轨道后画，因此 V2 会叠在 V1 之上。render order 来自 Track `order`，不会使用数组位置或固定轨道
+ID 推断叠放层级。每个视频层独立应用自己的位置、缩放、旋转、滤镜和 opacity；每个 VideoFrame
+编码后立即 close。
 
-音频按所有未静音音频轨 Clip 的源区间裁剪，线性重采样到 48kHz 双声道后按工程时间写入固定
-编码 chunk。不同音频轨可以在同一时间重叠，样本会加和混合并在写入 `AudioData` 前限幅到
-`[-1, 1]`；静音音频轨和不含音频的素材不会进入混音。codec 队列高水位为 8。
+音频按所有仍挂在现存、未静音音频轨上的 Clip 的源区间裁剪，线性重采样到 48kHz 双声道后按工程
+时间写入固定编码 chunk。不同音频轨可以在同一时间重叠，样本会加和混合并在写入 `AudioData` 前
+限幅到 `[-1, 1]`；静音音频轨、不含音频的素材、以及已删除轨道遗留的 Clip 不会进入混音。
+codec 队列高水位为 8。
+
+导出仍只允许原素材 source。proxy 是预览优化产物，不能作为最终导出的质量来源；仍被现存视频/音频
+轨道引用的任一 Clip 缺少原始 source 时，导出会直接失败并说明“代理文件禁止用于导出”。删除轨道
+后的级联内容不会再参与 source 收集、视频 sample 读取或音频混音。
 
 成功后先 finalize Mux，再把临时文件复制为 `export-<requestId>.mp4` 并删除 `.tmp-`。
 取消会 cancel Output、关闭 codec/Input、删除临时和未完成 final；下载 URL 在替换或组件

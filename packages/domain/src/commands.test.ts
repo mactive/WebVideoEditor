@@ -7,6 +7,21 @@ import { createTestProject } from "./test-fixture";
 
 const now = "2026-08-09T01:00:00.000Z";
 
+function addTrack(
+  project: ReturnType<typeof createTestProject>,
+  id: string,
+  kind: "audio" | "text" | "video",
+): void {
+  project.tracks.push({
+    id,
+    kind,
+    name: id,
+    order: project.tracks.length,
+    muted: false,
+    locked: false,
+  });
+}
+
 describe("project commands", () => {
   it("adapts only an empty project canvas to the first asset display size", () => {
     const empty = createTestProject();
@@ -251,6 +266,24 @@ describe("project commands", () => {
           },
         ]),
     },
+    {
+      command: {
+        type: "track.reorder",
+        trackIds: ["text-1", "video-1"],
+      },
+      verify: (project) =>
+        expect(project.tracks.map((track) => [track.id, track.order])).toEqual([
+          ["video-1", 1],
+          ["text-1", 0],
+        ]),
+    },
+    {
+      command: {
+        type: "timeline.duration.set",
+        durationUs: 60_000_000,
+      },
+      verify: (project) => expect(project.timeline.durationUs).toBe(60_000_000),
+    },
   ])("applies $command.type without mutating input", ({ command, verify }) => {
     const original = createTestProject();
     const snapshot = structuredClone(original);
@@ -307,6 +340,209 @@ describe("project commands", () => {
       ),
     ).toThrow("重叠");
   });
+
+  it("clamps configured timeline duration to the content end", () => {
+    const project = createTestProject();
+    project.texts[0]!.endUs = 15_000_000;
+    project.timeline.durationUs = 15_000_000;
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "timeline.duration.set",
+        durationUs: 1_000_000,
+      },
+      now,
+    );
+
+    expect(result.timeline.durationUs).toBe(15_000_000);
+  });
+
+  it("normalizes track order after reordering", () => {
+    const result = applyProjectCommand(
+      createTestProject(),
+      {
+        type: "track.reorder",
+        trackIds: ["text-1", "video-1"],
+      },
+      now,
+    );
+
+    expect(result.tracks.map((track) => [track.id, track.order])).toEqual([
+      ["video-1", 1],
+      ["text-1", 0],
+    ]);
+  });
+
+  it("deletes empty tracks and normalizes remaining order", () => {
+    const project = createTestProject();
+    addTrack(project, "video-2", "video");
+
+    const result = applyProjectCommand(
+      project,
+      { type: "track.delete", trackId: "video-2" },
+      now,
+    );
+
+    expect(result.tracks.map((track) => [track.id, track.order])).toEqual([
+      ["video-1", 0],
+      ["text-1", 1],
+    ]);
+  });
+
+  it("cascades track contents only after confirmation", () => {
+    const project = createTestProject();
+    addTrack(project, "video-2", "video");
+    project.clips.push({
+      id: "clip-on-video-2",
+      assetId: "asset-1",
+      trackId: "video-2",
+      timelineStartUs: 0,
+      sourceStartUs: 0,
+      sourceEndUs: 2_000_000,
+      effects: [],
+    });
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        { type: "track.delete", trackId: "video-2" },
+        now,
+      ),
+    ).toThrow("轨道包含内容");
+
+    const result = applyProjectCommand(
+      project,
+      { type: "track.delete", trackId: "video-2", cascade: true },
+      now,
+    );
+
+    expect(result.tracks.map((track) => track.id)).toEqual([
+      "video-1",
+      "text-1",
+    ]);
+    expect(result.clips.map((clip) => clip.id)).toEqual(["clip-1", "clip-2"]);
+  });
+
+  it("cascades text track contents after confirmation", () => {
+    const project = createTestProject();
+    addTrack(project, "text-2", "text");
+    project.texts[0]!.trackId = "text-2";
+
+    const result = applyProjectCommand(
+      project,
+      { type: "track.delete", trackId: "text-2", cascade: true },
+      now,
+    );
+
+    expect(result.tracks.map((track) => track.id)).toEqual([
+      "video-1",
+      "text-1",
+    ]);
+    expect(result.texts).toEqual([]);
+  });
+
+  it("blocks deleting the last track of the same kind", () => {
+    expect(() =>
+      applyProjectCommand(
+        createTestProject(),
+        { type: "track.delete", trackId: "text-1" },
+        now,
+      ),
+    ).toThrow("不能删除最后一条文字轨道");
+  });
+
+  it("moves a clip across same-kind tracks", () => {
+    const project = createTestProject();
+    addTrack(project, "video-2", "video");
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.move",
+        clipId: "clip-2",
+        trackId: "video-2",
+        timelineStartUs: 1_000_000,
+      },
+      now,
+    );
+
+    expect(result.clips[1]).toEqual(
+      expect.objectContaining({
+        id: "clip-2",
+        trackId: "video-2",
+        timelineStartUs: 1_000_000,
+      }),
+    );
+  });
+
+  it("rejects moving a clip to a different media kind", () => {
+    const project = createTestProject();
+    addTrack(project, "audio-1", "audio");
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        {
+          type: "clip.move",
+          clipId: "clip-1",
+          trackId: "audio-1",
+          timelineStartUs: 0,
+        },
+        now,
+      ),
+    ).toThrow("片段只能移动到同类型媒体轨道");
+  });
+
+  it("rejects moving a clip into a target track conflict", () => {
+    const project = createTestProject();
+    addTrack(project, "video-2", "video");
+    project.clips.push({
+      id: "clip-on-video-2",
+      assetId: "asset-1",
+      trackId: "video-2",
+      timelineStartUs: 2_000_000,
+      sourceStartUs: 0,
+      sourceEndUs: 7_000_000,
+      effects: [],
+    });
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        {
+          type: "clip.move",
+          clipId: "clip-2",
+          trackId: "video-2",
+          timelineStartUs: 3_000_000,
+        },
+        now,
+      ),
+    ).toThrow("重叠");
+  });
+
+  it("updates text tracks through text.update patches", () => {
+    const project = createTestProject();
+    addTrack(project, "text-2", "text");
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "text.update",
+        textId: "title-1",
+        patch: { trackId: "text-2", startUs: 1_000_000, endUs: 4_000_000 },
+      },
+      now,
+    );
+
+    expect(result.texts[0]).toEqual(
+      expect.objectContaining({
+        trackId: "text-2",
+        startUs: 1_000_000,
+        endUs: 4_000_000,
+      }),
+    );
+  });
 });
 
 describe("CommandBus", () => {
@@ -353,6 +589,14 @@ describe("CommandBus", () => {
       type: "clip.move",
       clipId: "clip-2",
       timelineStartUs: 7_000_000,
+    },
+    {
+      type: "track.reorder",
+      trackIds: ["text-1", "video-1"],
+    },
+    {
+      type: "timeline.duration.set",
+      durationUs: 60_000_000,
     },
     {
       type: "clip.trim",
@@ -466,6 +710,21 @@ describe("CommandBus", () => {
       muted: false,
       locked: false,
     });
+  });
+
+  it("round-trips track deletion through undo and redo", () => {
+    const initial = createTestProject();
+    addTrack(initial, "video-2", "video");
+    const bus = new CommandBus(initial, { now: () => now });
+
+    const applied = bus.execute({ type: "track.delete", trackId: "video-2" });
+
+    expect(applied.tracks.map((track) => track.id)).toEqual([
+      "video-1",
+      "text-1",
+    ]);
+    expect(bus.undo()).toEqual(initial);
+    expect(bus.redo()).toEqual(applied);
   });
 
   it("merges adjacent commands with the same transaction ID", () => {

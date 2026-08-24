@@ -1,17 +1,26 @@
 import { z } from "zod";
 
 import {
+  DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
   PROJECT_SCHEMA_VERSION,
   type ProjectDocument,
   projectDocumentSchema,
 } from "./schema";
+import { projectContentEndUs } from "./project";
 import { ProjectValidationError, validateProjectDocument } from "./validation";
 
-const projectDocumentV0Schema = projectDocumentSchema
+const projectDocumentV1Schema = projectDocumentSchema
+  .omit({ schemaVersion: true, timeline: true })
+  .extend({
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+const projectDocumentV0Schema = projectDocumentV1Schema
   .omit({ schemaVersion: true })
   .extend({
     schemaVersion: z.literal(0),
-    canvas: projectDocumentSchema.shape.canvas.omit({
+    canvas: projectDocumentV1Schema.shape.canvas.omit({
       backgroundColor: true,
     }),
   })
@@ -28,6 +37,26 @@ const migrations: Record<number, Migration> = {
       canvas: {
         ...project.canvas,
         backgroundColor: "#000000",
+      },
+    };
+  },
+  1: (input) => {
+    const project = projectDocumentV1Schema.parse(input);
+    const tracks = [...project.tracks]
+      .sort(
+        (left, right) =>
+          left.order - right.order || left.id.localeCompare(right.id),
+      )
+      .map((track, index) => ({ ...track, order: index }));
+    return {
+      ...project,
+      schemaVersion: 2,
+      tracks,
+      timeline: {
+        durationUs: projectContentEndUs(project),
+        defaultScale: {
+          pixelsPerSecond: DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+        },
       },
     };
   },

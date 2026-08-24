@@ -1,9 +1,11 @@
 import { type ProjectDocument, projectDocumentSchema } from "./schema";
+import { projectContentEndUs } from "./project";
 
 export type ProjectValidationIssue = {
   code:
     | "duplicate_id"
     | "invalid_boundary"
+    | "invalid_order"
     | "invalid_reference"
     | "overlap"
     | "schema";
@@ -46,6 +48,25 @@ function duplicateIssues(
   return issues;
 }
 
+function trackOrderIssues(project: ProjectDocument): ProjectValidationIssue[] {
+  const expectedOrders = new Set(project.tracks.map((_track, index) => index));
+  const seen = new Set<number>();
+  const issues: ProjectValidationIssue[] = [];
+
+  for (const [index, track] of project.tracks.entries()) {
+    if (!expectedOrders.has(track.order) || seen.has(track.order)) {
+      issues.push({
+        code: "invalid_order",
+        path: `tracks.${index}.order`,
+        message: "轨道 order 必须归一化为 0..N-1",
+      });
+    }
+    seen.add(track.order);
+  }
+
+  return issues;
+}
+
 export function validateProjectInvariants(
   project: ProjectDocument,
 ): ProjectValidationIssue[] {
@@ -54,9 +75,18 @@ export function validateProjectInvariants(
     ...duplicateIssues(project.tracks, "tracks"),
     ...duplicateIssues(project.clips, "clips"),
     ...duplicateIssues(project.texts, "texts"),
+    ...trackOrderIssues(project),
   ];
   const assets = new Map(project.assets.map((asset) => [asset.id, asset]));
   const tracks = new Map(project.tracks.map((track) => [track.id, track]));
+
+  if (project.timeline.durationUs < projectContentEndUs(project)) {
+    issues.push({
+      code: "invalid_boundary",
+      path: "timeline.durationUs",
+      message: "时间线总时长不能小于最长内容末尾",
+    });
+  }
 
   for (const [index, clip] of project.clips.entries()) {
     const path = `clips.${index}`;

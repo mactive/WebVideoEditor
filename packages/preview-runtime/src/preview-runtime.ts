@@ -1,4 +1,7 @@
-import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  projectContentEndUs,
+  type ProjectDocument,
+} from "@web-video-editor/domain";
 import {
   MonotonicProjectClock,
   createMediabunnyDecoderQueueObservation,
@@ -55,19 +58,7 @@ export type PreviewRuntimeOptions = {
 };
 
 function projectDurationUs(project: ProjectDocument): number {
-  const clipEnd = project.clips.reduce(
-    (maximum, clip) =>
-      Math.max(
-        maximum,
-        clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs,
-      ),
-    0,
-  );
-  const textEnd = project.texts.reduce(
-    (maximum, text) => Math.max(maximum, text.endUs),
-    0,
-  );
-  return Math.max(clipEnd, textEnd);
+  return Math.max(project.timeline.durationUs, projectContentEndUs(project));
 }
 
 function audioClipsForPlayback(

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
   PROJECT_SCHEMA_VERSION,
   type ProjectDocument,
 } from "@web-video-editor/domain";
@@ -112,6 +113,12 @@ function project(): ProjectDocument {
         order: 1,
       },
     ],
+    timeline: {
+      durationUs: 7_000_000,
+      defaultScale: {
+        pixelsPerSecond: DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+      },
+    },
     updatedAt: "2026-08-09T00:00:00.000Z",
   };
 }
@@ -310,6 +317,44 @@ describe("ProjectRuntimeAdapter", () => {
     expect(adapter.world.size).toBe(1);
   });
 
+  it("does not keep entities whose tracks were deleted", () => {
+    const adapter = new ProjectRuntimeAdapter();
+    const initial = project();
+    adapter.evaluate(initial, 2_500_000);
+
+    const revised: ProjectDocument = {
+      ...initial,
+      clips: [
+        ...initial.clips,
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "deleted-video",
+          sourceEndUs: 3_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          trackId: "deleted-video-track",
+        },
+      ],
+      revision: 2,
+      tracks: initial.tracks.filter((track) => track.id !== "text"),
+    };
+
+    const result = adapter.evaluate(revised, 2_500_000);
+
+    expect(result).toMatchObject({
+      created: 0,
+      released: 1,
+      updated: 1,
+    });
+    expect(result.activeEntities.map((entity) => entity.id)).toEqual([
+      "clip:clip-1",
+    ]);
+    expect([...adapter.world].map((entity) => entity.id)).toEqual([
+      "clip:clip-1",
+    ]);
+  });
+
   it("evaluates the same ECS systems with the original export profile", () => {
     let rendered: readonly RuntimeEntity[] = [];
     const adapter = new ProjectRuntimeAdapter({
@@ -344,6 +389,54 @@ describe("ProjectRuntimeAdapter", () => {
 });
 
 describe("PreviewRuntime multi-layer scheduling", () => {
+  it("uses the configured project timeline duration for transport bounds", () => {
+    const document: ProjectDocument = {
+      ...project(),
+      clips: [],
+      texts: [],
+      timeline: {
+        ...project().timeline,
+        durationUs: 120_000_000,
+      },
+    };
+    const decoderQueue =
+      createMediabunnyDecoderQueueObservation("VideoDecoder");
+    const decoder = {
+      activeResources: () => 0,
+      dispose: vi.fn(),
+      resourceSnapshot: () => ({
+        activeTotal: 0,
+        byType: {},
+        leaked: [],
+      }),
+      stats: () => ({
+        decodeQueue: 0,
+        decoderQueue,
+        droppedFrames: 0,
+        staleFrames: 0,
+      }),
+      subscribeStats: () => () => undefined,
+    } as unknown as PreviewDecoderClient;
+    const renderer = {
+      destroy: vi.fn(),
+      present: vi.fn(),
+      sync: vi.fn(),
+    } as unknown as PixiPreviewRenderer;
+
+    const runtime = new PreviewRuntime({
+      decoder,
+      project: document,
+      renderer,
+      sources: [],
+    });
+
+    expect(runtime.getSnapshot().durationUs).toBe(120_000_000);
+    runtime.seek(90_000_000);
+    expect(runtime.getSnapshot().metrics.playheadUs).toBe(90_000_000);
+
+    runtime.dispose();
+  });
+
   it("requests and presents a decoded frame for every active video entity", async () => {
     const document: ProjectDocument = {
       ...project(),
@@ -500,6 +593,15 @@ describe("PreviewRuntime multi-layer scheduling", () => {
           sourceStartUs: 2_000_000,
           timelineStartUs: 0,
           trackId: "audio-muted",
+        },
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "audio-deleted-track",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 3_000_000,
+          timelineStartUs: 0,
+          trackId: "audio-deleted",
         },
       ],
       texts: [],

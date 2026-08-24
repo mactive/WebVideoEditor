@@ -1,4 +1,7 @@
-import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  projectContentEndUs,
+  type ProjectDocument,
+} from "@web-video-editor/domain";
 import {
   MediabunnyDecoderQueueAdapter,
   ResourceLifecycleTracker,
@@ -33,7 +36,6 @@ import {
   type VideoSample,
 } from "mediabunny";
 
-import { projectDurationUs } from "../timeline/timelineMath";
 import {
   EXPORT_OUTPUT_DIRECTORY,
   type ExportSource,
@@ -167,6 +169,10 @@ export function normalizedAudioTimestampUs(
   decodedSourceTimeUs: number,
 ): number {
   return Math.max(0, timelineStartUs + decodedSourceTimeUs - sourceStartUs);
+}
+
+function exportDurationUs(project: ProjectDocument): number {
+  return Math.max(project.timeline.durationUs, projectContentEndUs(project));
 }
 
 async function createOutputFile(requestId: string): Promise<OutputFile> {
@@ -566,7 +572,7 @@ export function audibleAudioClips(
 ): ProjectDocument["clips"] {
   const tracks = new Map(project.tracks.map((track) => [track.id, track]));
   const assets = new Map(project.assets.map((asset) => [asset.id, asset]));
-  return project.clips.filter((clip) => {
+  return liveTimelineClips(project).filter((clip) => {
     const track = tracks.get(clip.trackId);
     if (track?.kind !== "audio" || track.muted) {
       return false;
@@ -574,6 +580,23 @@ export function audibleAudioClips(
     const asset = assets.get(clip.assetId);
     return asset?.hasAudio === true && clip.sourceEndUs > clip.sourceStartUs;
   });
+}
+
+export function liveTimelineClips(
+  project: ProjectDocument,
+): ProjectDocument["clips"] {
+  const tracks = new Map(project.tracks.map((track) => [track.id, track]));
+  return project.clips.filter((clip) => {
+    const kind = tracks.get(clip.trackId)?.kind;
+    return kind === "audio" || kind === "video";
+  });
+}
+
+function exportVideoClips(project: ProjectDocument): ProjectDocument["clips"] {
+  const tracks = new Map(project.tracks.map((track) => [track.id, track]));
+  return liveTimelineClips(project).filter(
+    (clip) => tracks.get(clip.trackId)?.kind === "video",
+  );
 }
 
 function shouldExportAudio(project: ProjectDocument): boolean {
@@ -585,7 +608,7 @@ export async function exportProjectToMp4(
 ): Promise<MediaExportResult> {
   const startedAt = performance.now();
   const { logger, project, requestId, signal } = options;
-  const durationUs = projectDurationUs(project);
+  const durationUs = exportDurationUs(project);
   const totalFrames = exportFrameCount(
     durationUs,
     project.exportSettings.frameRate,
@@ -593,7 +616,8 @@ export async function exportProjectToMp4(
   const sourceMap = new Map(
     options.sources.map((source) => [source.assetId, source]),
   );
-  const requiredAssetIds = new Set(project.clips.map((clip) => clip.assetId));
+  const liveClips = liveTimelineClips(project);
+  const requiredAssetIds = new Set(liveClips.map((clip) => clip.assetId));
   for (const assetId of requiredAssetIds) {
     if (!sourceMap.has(assetId)) {
       throw new Error(
@@ -792,7 +816,7 @@ export async function exportProjectToMp4(
       string,
       AsyncIterator<VideoSample | null, void>
     >();
-    for (const clip of project.clips) {
+    for (const clip of exportVideoClips(project)) {
       const runtime = runtimes.get(clip.assetId);
       if (!runtime) {
         continue;

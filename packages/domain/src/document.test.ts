@@ -10,6 +10,11 @@ import {
 import { createTestProject } from "./test-fixture";
 import { validateProjectDocument } from "./validation";
 
+function asVersionOne(project: ReturnType<typeof createTestProject>): unknown {
+  const { timeline: _timeline, ...versionOne } = project;
+  return { ...versionOne, schemaVersion: 1 };
+}
+
 function addAudioTrack(
   project: ReturnType<typeof createTestProject>,
   id: string,
@@ -270,10 +275,45 @@ describe("Project Document", () => {
     }
   });
 
+  it("rejects a timeline duration shorter than the content end", () => {
+    const project = createTestProject();
+    project.timeline.durationUs = 1_000_000;
+
+    const result = validateProjectDocument(project);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: "invalid_boundary",
+          path: "timeline.durationUs",
+        }),
+      );
+    }
+  });
+
+  it("rejects non-normalized track order", () => {
+    const project = createTestProject();
+    project.tracks[1]!.order = 0;
+
+    const result = validateProjectDocument(project);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: "invalid_order",
+          path: "tracks.1.order",
+        }),
+      );
+    }
+  });
+
   it("migrates version 0 and rejects future versions", () => {
     const current = createTestProject();
+    const currentVersionOne = asVersionOne(current);
     const versionZero = {
-      ...current,
+      ...(currentVersionOne as Record<string, unknown>),
       schemaVersion: 0,
       canvas: {
         width: current.canvas.width,
@@ -283,21 +323,36 @@ describe("Project Document", () => {
 
     const migrated = migrateProjectDocument(versionZero);
 
-    expect(migrated.schemaVersion).toBe(1);
+    expect(migrated.schemaVersion).toBe(2);
     expect(migrated.canvas.backgroundColor).toBe("#000000");
+    expect(migrated.timeline).toEqual({
+      durationUs: 11_000_000,
+      defaultScale: {
+        pixelsPerSecond: 80,
+      },
+    });
     expect(() =>
-      migrateProjectDocument({ ...current, schemaVersion: 2 }),
-    ).toThrow("不支持 schemaVersion 2");
+      migrateProjectDocument({ ...current, schemaVersion: 3 }),
+    ).toThrow("不支持 schemaVersion 3");
+  });
+
+  it("migrates version 1 projects without timeline settings", () => {
+    const migrated = migrateProjectDocument(asVersionOne(createTestProject()));
+
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.timeline.durationUs).toBe(11_000_000);
+    expect(migrated.timeline.defaultScale.pixelsPerSecond).toBe(80);
   });
 
   it("rejects malformed and invariant-breaking migration inputs", () => {
     const current = createTestProject();
+    const currentVersionOne = asVersionOne(current);
     expect(() => migrateProjectDocument({ name: "missing version" })).toThrow(
       "缺少有效的 schemaVersion",
     );
     expect(() =>
       migrateProjectDocument({
-        ...current,
+        ...(currentVersionOne as Record<string, unknown>),
         schemaVersion: 0,
         canvas: {
           height: current.canvas.height,

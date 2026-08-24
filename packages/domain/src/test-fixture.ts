@@ -2,7 +2,7 @@ import type { ProjectDocument } from "./schema";
 
 export function createTestProject(): ProjectDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "project-1",
     name: "测试工程",
     revision: 0,
@@ -91,6 +91,12 @@ export function createTestProject(): ProjectDocument {
       audioCodec: "aac",
       videoBitrate: 8_000_000,
       audioBitrate: 192_000,
+    },
+    timeline: {
+      durationUs: 11_000_000,
+      defaultScale: {
+        pixelsPerSecond: 80,
+      },
     },
   };
 }

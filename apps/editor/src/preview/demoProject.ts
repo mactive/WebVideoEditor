@@ -1,4 +1,8 @@
-import type { ProjectDocument } from "@web-video-editor/domain";
+import {
+  DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+  PROJECT_SCHEMA_VERSION,
+  type ProjectDocument,
+} from "@web-video-editor/domain";
 import type { ProxyManifest } from "@web-video-editor/media-runtime";
 import type { PreviewSource } from "@web-video-editor/preview-runtime";
 
@@ -76,7 +80,7 @@ export function createPreviewDemo(manifest: ProxyManifest): {
     id: "task-8-preview",
     name: "Task 8 test_1 真实代理预览",
     revision: 1,
-    schemaVersion: 1,
+    schemaVersion: PROJECT_SCHEMA_VERSION,
     texts: [
       {
         color: "#ffffff",
@@ -110,6 +114,12 @@ export function createPreviewDemo(manifest: ProxyManifest): {
         order: 1,
       },
     ],
+    timeline: {
+      durationUs,
+      defaultScale: {
+        pixelsPerSecond: DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
+      },
+    },
     updatedAt: now,
   };
   return {
