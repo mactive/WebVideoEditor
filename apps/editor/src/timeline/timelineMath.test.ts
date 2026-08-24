@@ -64,4 +64,31 @@ describe("timeline math", () => {
     expect(clampClipMove(project, "clip-2", 3_000_000)).toBe(5_000_000);
     expect(clampClipMove(project, "clip-1", 4_000_000)).toBe(2_000_000);
   });
+
+  it("calculates append and movement boundaries within the clip track", () => {
+    const project = projectWithClips();
+    project.tracks.push({
+      id: "video-track-2",
+      kind: "video",
+      name: "视频 2",
+      order: 3,
+      muted: false,
+      locked: false,
+    });
+    expect(appendTimelineStartUs(project, "video-track-2")).toBe(0);
+    project.clips.push({
+      assetId: "asset",
+      effects: [],
+      id: "clip-3",
+      sourceEndUs: 1_000_000,
+      sourceStartUs: 0,
+      timelineStartUs: 5_500_000,
+      trackId: "video-track-2",
+    });
+
+    expect(appendTimelineStartUs(project, "video-track")).toBe(11_000_000);
+    expect(appendTimelineStartUs(project, "video-track-2")).toBe(6_500_000);
+    expect(clampClipMove(project, "clip-3", 0)).toBe(0);
+    expect(clampClipMove(project, "clip-3", 6_500_000)).toBe(6_500_000);
+  });
 });

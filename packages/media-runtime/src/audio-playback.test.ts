@@ -115,6 +115,113 @@ describe("MediabunnyAudioPlayback", () => {
     expect(nodes[1]?.stop).toHaveBeenCalledWith(12);
   });
 
+  it("mixes overlapping clips by scheduling each source at the same timeline time", async () => {
+    const { context, nodes } = audioHarness();
+    const decodeWindow: AudioWindowDecoder = vi.fn(
+      async (_source, startSec, endSec) => [
+        decoded(startSec - 0.25, endSec - startSec + 0.5),
+      ],
+    );
+    const playback = new MediabunnyAudioPlayback({
+      audioContext: context,
+      decodeWindow,
+      lookAheadUs: 2_000_000,
+      scheduleLeadSec: 0,
+      sources,
+    });
+
+    await playback.start({
+      clips: [
+        {
+          assetId: "asset-a",
+          id: "clip-a",
+          sourceEndUs: 6_000_000,
+          sourceStartUs: 5_000_000,
+          timelineStartUs: 1_000_000,
+        },
+        {
+          assetId: "asset-b",
+          id: "clip-b",
+          sourceEndUs: 11_000_000,
+          sourceStartUs: 10_000_000,
+          timelineStartUs: 1_500_000,
+        },
+      ],
+      projectDurationUs: 3_500_000,
+      projectRevision: 3,
+      startTimeUs: 1_500_000,
+    });
+
+    expect(decodeWindow).toHaveBeenNthCalledWith(
+      1,
+      sources.get("asset-a"),
+      5.5,
+      6,
+      expect.any(AbortSignal),
+    );
+    expect(decodeWindow).toHaveBeenNthCalledWith(
+      2,
+      sources.get("asset-b"),
+      10,
+      11,
+      expect.any(AbortSignal),
+    );
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0]?.start).toHaveBeenCalledWith(10, 0.25);
+    expect(nodes[0]?.stop).toHaveBeenCalledWith(10.5);
+    expect(nodes[1]?.start).toHaveBeenCalledWith(10, 0.25);
+    expect(nodes[1]?.stop).toHaveBeenCalledWith(11);
+    expect(playback.stats().activeSources).toBe(2);
+  });
+
+  it("skips muted clips in the playback request", async () => {
+    const { context, nodes } = audioHarness();
+    const decodeWindow: AudioWindowDecoder = vi.fn(
+      async (_source, startSec, endSec) => [
+        decoded(startSec, endSec - startSec),
+      ],
+    );
+    const playback = new MediabunnyAudioPlayback({
+      audioContext: context,
+      decodeWindow,
+      lookAheadUs: 1_000_000,
+      scheduleLeadSec: 0,
+      sources,
+    });
+
+    await playback.start({
+      clips: [
+        {
+          assetId: "asset-a",
+          id: "clip-a",
+          muted: true,
+          sourceEndUs: 1_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+        },
+        {
+          assetId: "asset-b",
+          id: "clip-b",
+          sourceEndUs: 2_000_000,
+          sourceStartUs: 1_000_000,
+          timelineStartUs: 0,
+        },
+      ],
+      projectDurationUs: 1_000_000,
+      projectRevision: 3,
+      startTimeUs: 0,
+    });
+
+    expect(decodeWindow).toHaveBeenCalledOnce();
+    expect(decodeWindow).toHaveBeenCalledWith(
+      sources.get("asset-b"),
+      1,
+      2,
+      expect.any(AbortSignal),
+    );
+    expect(nodes).toHaveLength(1);
+  });
+
   it("stops every old source before scheduling a new seek generation", async () => {
     const { context, nodes } = audioHarness();
     const playback = new MediabunnyAudioPlayback({

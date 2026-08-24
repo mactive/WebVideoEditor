@@ -101,6 +101,7 @@ async function decode(
     if (!sample || obsolete(request.requestId, signal)) {
       sample?.close();
       post({
+        entityId: request.entityId,
         ...queueFields(),
         reason: cancelled.has(request.requestId) ? "cancelled" : "superseded",
         requestId: request.requestId,
@@ -115,6 +116,7 @@ async function decode(
     if (obsolete(request.requestId, signal)) {
       frame.close();
       post({
+        entityId: request.entityId,
         ...queueFields(),
         reason: "superseded",
         requestId: request.requestId,
@@ -126,6 +128,7 @@ async function decode(
     post(
       {
         decodeFromUs: sourceTimeUs,
+        entityId: request.entityId,
         ...queueFields(),
         frame,
         generation: request.generation,
@@ -140,6 +143,7 @@ async function decode(
     );
   } catch (error) {
     post({
+      entityId: request.entityId,
       ...queueFields(),
       error: error instanceof Error ? error.message : String(error),
       projectRevision: request.projectRevision,
@@ -190,6 +194,7 @@ endpoint.addEventListener(
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           post({
+            entityId: request.entityId,
             ...queueFields(),
             reason: cancelled.has(request.requestId)
               ? "cancelled"
@@ -207,6 +212,7 @@ endpoint.addEventListener(
           decodeTasks.delete(request.requestId);
         }
         post({
+          entityId: request.entityId,
           ...queueFields(),
           requestId: request.requestId,
           type: "preview.queue",

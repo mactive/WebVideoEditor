@@ -126,6 +126,7 @@ function initialSnapshot(project: ProjectDocument): PreviewRuntimeSnapshot {
     ),
     metrics: {
       activeResources: 0,
+      activeVideoLayers: 0,
       audioActiveSources: 0,
       audioGeneration: 0,
       avDriftUs: 0,
@@ -425,7 +426,9 @@ export function PreviewPanel({
   return (
     <section
       className={`preview-panel${embedded ? " preview-panel--embedded" : ""}`}
+      data-active-audio-sources={snapshot.metrics.audioActiveSources}
       data-active-resources={snapshot.metrics.activeResources}
+      data-active-video-layers={snapshot.metrics.activeVideoLayers}
       data-active-video-frames={activeVideoFrames}
       data-decode-active={videoDecodeQueue.active}
       data-decode-backpressure={videoDecodeQueue.backpressureCount}
@@ -585,7 +588,9 @@ export function PreviewPanel({
               </span>
               <span data-testid="active-resources">
                 <strong>活跃资源</strong> {snapshot.metrics.activeResources} ·
-                VideoFrame {activeVideoFrames}
+                Video Layers {snapshot.metrics.activeVideoLayers} · Audio
+                Sources {snapshot.metrics.audioActiveSources} · VideoFrame{" "}
+                {activeVideoFrames}
               </span>
               <span data-testid="runtime-video-decoder">
                 <strong>Video Decode</strong> {videoDecodeQueueText}

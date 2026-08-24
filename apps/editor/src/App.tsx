@@ -1,4 +1,8 @@
-import type { Asset, ProjectCommand } from "@web-video-editor/domain";
+import type {
+  Asset,
+  ProjectCommand,
+  ProjectDocument,
+} from "@web-video-editor/domain";
 import type {
   BrowserMediaSource,
   MediaProbeResult,
@@ -32,13 +36,20 @@ import {
 import { ExportPanel } from "./export/ExportPanel";
 import { Inspector } from "./inspector/Inspector";
 import { LogPanel } from "./logs/LogPanel";
-import { MediaPanel, type TimelineAddContext } from "./media/MediaPanel";
+import {
+  MediaPanel,
+  type TimelineAddContext,
+  type TimelineAddKind,
+  type TimelineAddOptions,
+} from "./media/MediaPanel";
 import { PreviewPanel } from "./preview/PreviewPanel";
 import {
   ProjectCommandController,
   clipSelected,
   createEditorStore,
   playheadChanged,
+  targetAudioTrackSelected,
+  targetVideoTrackSelected,
   textSelected,
 } from "./store";
 import { Timeline } from "./timeline/Timeline";
@@ -111,6 +122,23 @@ function proxyRuntimeSource(
   };
 }
 
+function mediaTracksInOrder(project: ProjectDocument, kind: TimelineAddKind) {
+  return project.tracks
+    .filter((track) => track.kind === kind)
+    .sort((left, right) => left.order - right.order);
+}
+
+function resolveTargetMediaTrackId(
+  project: ProjectDocument,
+  kind: TimelineAddKind,
+  preferredTrackId: string | null,
+): string | null {
+  const tracks = mediaTracksInOrder(project, kind);
+  return tracks.some((track) => track.id === preferredTrackId)
+    ? preferredTrackId
+    : (tracks[0]?.id ?? null);
+}
+
 export function App() {
   const [report, setReport] = useState<CapabilityReport>();
   const [failure, setFailure] = useState<string>();
@@ -169,7 +197,23 @@ export function App() {
     editorStore.getState,
   );
   const { document: project } = state.project;
-  const { playheadUs, selectedClipId, selectedTextId } = state.session;
+  const {
+    playheadUs,
+    selectedClipId,
+    selectedTextId,
+    targetAudioTrackId: sessionTargetAudioTrackId,
+    targetVideoTrackId: sessionTargetVideoTrackId,
+  } = state.session;
+  const targetVideoTrackId = useMemo(
+    () =>
+      resolveTargetMediaTrackId(project, "video", sessionTargetVideoTrackId),
+    [project, sessionTargetVideoTrackId],
+  );
+  const targetAudioTrackId = useMemo(
+    () =>
+      resolveTargetMediaTrackId(project, "audio", sessionTargetAudioTrackId),
+    [project, sessionTargetAudioTrackId],
+  );
   const actions = useMemo(
     () =>
       new Map<EditorAction, ActionAvailability>(
@@ -226,6 +270,18 @@ export function App() {
 
   useEffect(() => () => commandController.dispose(), [commandController]);
 
+  useEffect(() => {
+    if (sessionTargetVideoTrackId !== targetVideoTrackId) {
+      editorStore.dispatch(targetVideoTrackSelected(targetVideoTrackId));
+    }
+  }, [editorStore, sessionTargetVideoTrackId, targetVideoTrackId]);
+
+  useEffect(() => {
+    if (sessionTargetAudioTrackId !== targetAudioTrackId) {
+      editorStore.dispatch(targetAudioTrackSelected(targetAudioTrackId));
+    }
+  }, [editorStore, sessionTargetAudioTrackId, targetAudioTrackId]);
+
   useEffect(
     () => () => {
       for (const url of objectUrlsRef.current) {
@@ -252,6 +308,7 @@ export function App() {
         transactionId ? { transactionId } : undefined,
       );
       setStatus(`已执行 ${command.type}`);
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`操作未提交：${message}`);
@@ -263,6 +320,7 @@ export function App() {
         marker: "[COMMAND]",
         projectRevision: editorStore.getState().project.document.revision,
       });
+      return false;
     }
   };
 
@@ -302,39 +360,101 @@ export function App() {
     setStatus(`${asset.name} 已导入，可立即添加并用原素材预览`);
   };
 
-  const addToTimeline = (assetId: string, addContext?: TimelineAddContext) => {
+  const addToTimeline = (
+    assetId: string,
+    addContext?: TimelineAddContext,
+    options: Partial<TimelineAddOptions> = {},
+  ) => {
     const current = editorStore.getState().project.document;
     const asset = current.assets.find((candidate) => candidate.id === assetId);
     if (!asset) {
       setStatus("素材尚未完成探测");
       return;
     }
+    const kind = options.kind ?? "video";
+    if (kind === "audio" && !asset.hasAudio) {
+      setStatus("该素材没有可添加到音频轨的音频流");
+      return;
+    }
+    const targetTrackId = resolveTargetMediaTrackId(
+      current,
+      kind,
+      kind === "video"
+        ? editorStore.getState().session.targetVideoTrackId
+        : editorStore.getState().session.targetAudioTrackId,
+    );
+    if (!targetTrackId) {
+      setStatus(
+        `当前工程没有可添加素材的${kind === "video" ? "视频" : "音频"}轨道`,
+      );
+      return;
+    }
     const clipId = `clip-${crypto.randomUUID()}`;
-    execute({
+    const timelineStartUs =
+      options.placement === "append"
+        ? appendTimelineStartUs(current, targetTrackId)
+        : editorStore.getState().session.playheadUs;
+    const committed = execute({
       clip: {
         assetId,
         effects: [],
         id: clipId,
         sourceEndUs: asset.durationUs,
         sourceStartUs: 0,
-        timelineStartUs: appendTimelineStartUs(current),
-        trackId: "video-track",
-        transform: {
-          rotationDeg: 0,
-          scale: 1,
-          x: 0.5,
-          y: 0.5,
-        },
+        timelineStartUs,
+        trackId: targetTrackId,
+        ...(kind === "video"
+          ? {
+              transform: {
+                rotationDeg: 0,
+                scale: 1,
+                x: 0.5,
+                y: 0.5,
+              },
+            }
+          : {}),
       },
       type: "clip.add",
     });
+    if (!committed) {
+      return;
+    }
     editorStore.dispatch(clipSelected(clipId));
     if (addContext) {
       setStatus(
-        addContext.previewSource === "proxy"
-          ? `${addContext.assetName} 已添加到时间线：使用 proxy 预览（cache ${addContext.cacheStatus}）。`
-          : `${addContext.assetName} 已添加到时间线：当前使用 source fallback，proxy ${addContext.proxyStatus}；${addContext.risk}`,
+        `${addContext.assetName} 已添加到${kind === "video" ? "视频" : "音频"}轨 ${options.placement === "append" ? "轨尾" : "播放头"}：${
+          addContext.previewSource === "proxy"
+            ? `使用 proxy 预览（cache ${addContext.cacheStatus}）。`
+            : `当前使用 source fallback，proxy ${addContext.proxyStatus}；${addContext.risk}`
+        }`,
       );
+    }
+  };
+
+  const addMediaTrack = (kind: TimelineAddKind) => {
+    const current = editorStore.getState().project.document;
+    const existingTrackIds = new Set(
+      mediaTracksInOrder(current, kind).map((track) => track.id),
+    );
+    const command: ProjectCommand =
+      kind === "video"
+        ? { type: "track.video.add" }
+        : { type: "track.audio.add" };
+    if (!execute(command)) {
+      return;
+    }
+    const nextProject = editorStore.getState().project.document;
+    const newTrack =
+      mediaTracksInOrder(nextProject, kind).find(
+        (track) => !existingTrackIds.has(track.id),
+      ) ?? mediaTracksInOrder(nextProject, kind).at(-1);
+    if (newTrack) {
+      editorStore.dispatch(
+        kind === "video"
+          ? targetVideoTrackSelected(newTrack.id)
+          : targetAudioTrackSelected(newTrack.id),
+      );
+      setStatus(`已新增并选中 ${newTrack.name}`);
     }
   };
 
@@ -477,7 +597,9 @@ export function App() {
       <Timeline
         canRedo={commandController.canRedo}
         canUndo={commandController.canUndo}
+        onAddAudioTrack={() => addMediaTrack("audio")}
         onAddTitle={addTitle}
+        onAddVideoTrack={() => addMediaTrack("video")}
         onDelete={deleteSelected}
         onEdit={(edit, transactionId) => execute(edit, transactionId)}
         onPlayheadChange={(nextPlayheadUs) =>
@@ -485,6 +607,12 @@ export function App() {
         }
         onRedo={redo}
         onSelectClip={(clipId) => editorStore.dispatch(clipSelected(clipId))}
+        onSelectTargetAudioTrack={(trackId) =>
+          editorStore.dispatch(targetAudioTrackSelected(trackId))
+        }
+        onSelectTargetVideoTrack={(trackId) =>
+          editorStore.dispatch(targetVideoTrackSelected(trackId))
+        }
         onSelectText={(textId) => editorStore.dispatch(textSelected(textId))}
         onSplit={splitSelected}
         onUndo={undo}
@@ -492,6 +620,8 @@ export function App() {
         project={project}
         selectedClipId={selectedClipId}
         selectedTextId={selectedTextId}
+        targetAudioTrackId={targetAudioTrackId}
+        targetVideoTrackId={targetVideoTrackId}
       />
 
       <ExportPanel

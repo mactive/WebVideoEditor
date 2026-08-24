@@ -2,12 +2,20 @@ import {
   PROJECT_SCHEMA_VERSION,
   type ProjectDocument,
 } from "@web-video-editor/domain";
-import { describe, expect, it } from "vitest";
+import {
+  createMediabunnyDecoderQueueObservation,
+  type AudioPlaybackRequest,
+  type MediabunnyAudioPlayback,
+} from "@web-video-editor/media-runtime";
+import { describe, expect, it, vi } from "vitest";
 
+import type { PreviewDecoderClient } from "./decoder";
+import type { PixiPreviewRenderer } from "./pixi-renderer";
+import { PreviewRuntime } from "./preview-runtime";
 import { resolveEffects, resolveQualityProfile } from "./quality";
 import { ProjectRuntimeAdapter } from "./runtime-adapter";
 import { PREVIEW_SYSTEM_ORDER } from "./systems";
-import type { RuntimeEntity } from "./types";
+import type { PreviewSource, RuntimeEntity } from "./types";
 
 function project(): ProjectDocument {
   return {
@@ -129,13 +137,16 @@ describe("ProjectRuntimeAdapter", () => {
 
     const first = adapter.evaluate(project(), 2_500_000);
     expect(first).toMatchObject({
+      activeVideos: [
+        {
+          assetId: "asset-1",
+          entityId: "clip:clip-1",
+          sourceTimeUs: 1_500_000,
+        },
+      ],
       created: 2,
       released: 0,
       updated: 0,
-      video: {
-        assetId: "asset-1",
-        sourceTimeUs: 1_500_000,
-      },
     });
     expect(rendered.map((entity) => entity.kind)).toEqual(["video", "text"]);
     expect(rendered[0]?.effects.resolved).toEqual([
@@ -145,7 +156,139 @@ describe("ProjectRuntimeAdapter", () => {
     const second = adapter.evaluate(project(), 5_500_000);
     expect(second.created).toBe(0);
     expect(second.activeEntities).toHaveLength(1);
-    expect(second.video?.sourceTimeUs).toBe(4_500_000);
+    expect(second.activeVideos[0]?.sourceTimeUs).toBe(4_500_000);
+  });
+
+  it("evaluates all active video entities in render order and syncs them to the render target", () => {
+    let rendered: readonly RuntimeEntity[] = [];
+    const adapter = new ProjectRuntimeAdapter({
+      renderTarget: {
+        sync(entities) {
+          rendered = entities;
+        },
+      },
+    });
+    const document: ProjectDocument = {
+      ...project(),
+      clips: [
+        {
+          assetId: "asset-1",
+          effects: [
+            {
+              amount: 1,
+              enabled: true,
+              id: "overlay-gray",
+              kind: "grayscale",
+            },
+          ],
+          id: "clip-overlay",
+          sourceEndUs: 4_000_000,
+          sourceStartUs: 1_000_000,
+          timelineStartUs: 1_000_000,
+          trackId: "video-overlay",
+          transform: {
+            rotationDeg: 18,
+            scale: 0.58,
+            x: 0.68,
+            y: 0.62,
+          },
+        },
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "clip-base",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          trackId: "video-base",
+        },
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "clip-audio",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          trackId: "audio",
+        },
+      ],
+      tracks: [
+        {
+          id: "video-overlay",
+          kind: "video",
+          locked: false,
+          muted: true,
+          name: "V2",
+          order: 2,
+        },
+        {
+          id: "video-base",
+          kind: "video",
+          locked: false,
+          muted: false,
+          name: "V1",
+          order: 0,
+        },
+        {
+          id: "text",
+          kind: "text",
+          locked: false,
+          muted: false,
+          name: "文字",
+          order: 1,
+        },
+        {
+          id: "audio",
+          kind: "audio",
+          locked: false,
+          muted: false,
+          name: "A1",
+          order: 3,
+        },
+      ],
+    };
+
+    const result = adapter.evaluate(document, 2_500_000);
+
+    expect(result.activeVideos).toEqual([
+      {
+        assetId: "asset-1",
+        entityId: "clip:clip-base",
+        order: 0,
+        sourceTimeUs: 2_500_000,
+      },
+      {
+        assetId: "asset-1",
+        entityId: "clip:clip-overlay",
+        order: 2,
+        sourceTimeUs: 2_500_000,
+      },
+    ]);
+    expect(result.activeEntities.map((entity) => entity.id)).toEqual([
+      "clip:clip-base",
+      "text:title",
+      "clip:clip-overlay",
+    ]);
+    expect(rendered.map((entity) => entity.id)).toEqual([
+      "clip:clip-base",
+      "text:title",
+      "clip:clip-overlay",
+    ]);
+    expect(rendered.map((entity) => entity.render.visible)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(rendered[2]?.effects.resolved).toEqual([
+      { amount: 1, id: "overlay-gray", kind: "grayscale" },
+    ]);
+    expect(rendered[2]?.transform).toMatchObject({
+      rotationRad: (18 * Math.PI) / 180,
+      scaleX: 0.58,
+      scaleY: 0.58,
+      x: 652.8000000000001,
+      y: 334.8,
+    });
   });
 
   it("updates and recycles entities when revision changes", () => {
@@ -180,7 +323,7 @@ describe("ProjectRuntimeAdapter", () => {
 
     const result = adapter.evaluate(project(), 2_500_000);
 
-    expect(result.video).toMatchObject({
+    expect(result.activeVideos[0]).toMatchObject({
       assetId: "asset-1",
       sourceTimeUs: 1_500_000,
     });
@@ -197,6 +340,316 @@ describe("ProjectRuntimeAdapter", () => {
       fontSize: 48,
       value: "真实标题",
     });
+  });
+});
+
+describe("PreviewRuntime multi-layer scheduling", () => {
+  it("requests and presents a decoded frame for every active video entity", async () => {
+    const document: ProjectDocument = {
+      ...project(),
+      clips: [
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "base",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          trackId: "video-base",
+        },
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "overlay",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          trackId: "video-overlay",
+        },
+      ],
+      texts: [],
+      tracks: [
+        {
+          id: "video-base",
+          kind: "video",
+          locked: false,
+          muted: false,
+          name: "V1",
+          order: 0,
+        },
+        {
+          id: "video-overlay",
+          kind: "video",
+          locked: false,
+          muted: false,
+          name: "V2",
+          order: 1,
+        },
+      ],
+    };
+    const source: PreviewSource = {
+      assetId: "asset-1",
+      cacheKey: "asset-1-cache",
+      cacheStatus: "hit",
+      frameRate: 30,
+      height: 540,
+      keyframes: [],
+      mediaUrl: "blob:asset-1",
+      width: 960,
+    };
+    const decoderQueue =
+      createMediabunnyDecoderQueueObservation("VideoDecoder");
+    const decode = vi.fn(
+      (
+        _source: PreviewSource,
+        sourceTimeUs: number,
+        projectRevision: number,
+        requestId: string,
+        entityId: string,
+        generation: number,
+      ) =>
+        Promise.resolve({
+          decodeFromUs: sourceTimeUs,
+          entityId,
+          frame: { timestamp: sourceTimeUs } as VideoFrame,
+          generation,
+          release: vi.fn(),
+          requestId,
+          requestedSourceTimeUs: sourceTimeUs,
+          sourceTimeUs,
+        }),
+    );
+    const decoder = {
+      activeResources: () => 0,
+      decode,
+      dispose: vi.fn(),
+      resourceSnapshot: () => ({
+        activeTotal: 0,
+        byType: {},
+        leaked: [],
+      }),
+      stats: () => ({
+        decodeQueue: 0,
+        decoderQueue,
+        droppedFrames: 0,
+        staleFrames: 0,
+      }),
+      subscribeStats: () => () => undefined,
+    } as unknown as PreviewDecoderClient;
+    const renderer = {
+      destroy: vi.fn(),
+      present: vi.fn(),
+      sync: vi.fn(),
+    } as unknown as PixiPreviewRenderer;
+
+    const runtime = new PreviewRuntime({
+      decoder,
+      project: document,
+      renderer,
+      sources: [source],
+    });
+
+    await vi.waitFor(() => {
+      expect(decode).toHaveBeenCalledTimes(2);
+      expect(renderer.present).toHaveBeenCalledTimes(2);
+    });
+    expect(decode.mock.calls.map((call) => call[4])).toEqual([
+      "clip:base",
+      "clip:overlay",
+    ]);
+    expect(
+      vi.mocked(renderer.present).mock.calls.map((call) => call[1].entityId),
+    ).toEqual(["clip:base", "clip:overlay"]);
+    expect(runtime.getSnapshot().metrics.activeVideoLayers).toBe(2);
+
+    runtime.dispose();
+  });
+
+  it("plays only unmuted audio-track clips while keeping muted video tracks visible", async () => {
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn(() => 1),
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const document: ProjectDocument = {
+      ...project(),
+      clips: [
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "video-muted",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          trackId: "video-muted",
+        },
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "audio-live",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 1_000_000,
+          timelineStartUs: 0,
+          trackId: "audio-live",
+        },
+        {
+          assetId: "asset-1",
+          effects: [],
+          id: "audio-muted",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 2_000_000,
+          timelineStartUs: 0,
+          trackId: "audio-muted",
+        },
+      ],
+      texts: [],
+      tracks: [
+        {
+          id: "video-muted",
+          kind: "video",
+          locked: false,
+          muted: true,
+          name: "V1",
+          order: 0,
+        },
+        {
+          id: "audio-live",
+          kind: "audio",
+          locked: false,
+          muted: false,
+          name: "A1",
+          order: 1,
+        },
+        {
+          id: "audio-muted",
+          kind: "audio",
+          locked: false,
+          muted: true,
+          name: "A2",
+          order: 2,
+        },
+      ],
+    };
+    const source: PreviewSource = {
+      assetId: "asset-1",
+      cacheKey: "asset-1-cache",
+      cacheStatus: "hit",
+      frameRate: 30,
+      height: 540,
+      keyframes: [],
+      mediaUrl: "blob:asset-1",
+      width: 960,
+    };
+    const decoderQueue =
+      createMediabunnyDecoderQueueObservation("VideoDecoder");
+    const decode = vi.fn(
+      (
+        _source: PreviewSource,
+        sourceTimeUs: number,
+        projectRevision: number,
+        requestId: string,
+        entityId: string,
+        generation: number,
+      ) =>
+        Promise.resolve({
+          decodeFromUs: sourceTimeUs,
+          entityId,
+          frame: { timestamp: sourceTimeUs } as VideoFrame,
+          generation,
+          release: vi.fn(),
+          requestId,
+          requestedSourceTimeUs: sourceTimeUs,
+          sourceTimeUs,
+        }),
+    );
+    const decoder = {
+      activeResources: () => 0,
+      decode,
+      dispose: vi.fn(),
+      resourceSnapshot: () => ({
+        activeTotal: 0,
+        byType: {},
+        leaked: [],
+      }),
+      stats: () => ({
+        decodeQueue: 0,
+        decoderQueue,
+        droppedFrames: 0,
+        staleFrames: 0,
+      }),
+      subscribeStats: () => () => undefined,
+    } as unknown as PreviewDecoderClient;
+    const renderer = {
+      destroy: vi.fn(),
+      present: vi.fn(),
+      sync: vi.fn(),
+    } as unknown as PixiPreviewRenderer;
+    const audioDecoderQueue =
+      createMediabunnyDecoderQueueObservation("AudioDecoder");
+    const audio = {
+      dispose: vi.fn(),
+      setSources: vi.fn(),
+      start: vi.fn(async (request: AudioPlaybackRequest) => ({
+        generation: 1,
+        hasAudio: request.clips.length > 0,
+        nowSeconds: () => 10,
+        startedAtSeconds: 10,
+      })),
+      stats: vi.fn(() => ({
+        activeGenerations: [1],
+        activeSources: 1,
+        decoderQueue: audioDecoderQueue,
+        decodedBuffers: 1,
+        generation: 1,
+        projectRevision: document.revision,
+        scheduledBuffers: 1,
+        staleBuffers: 0,
+        stoppedSources: 0,
+      })),
+      stop: vi.fn(),
+    } as unknown as MediabunnyAudioPlayback;
+
+    const runtime = new PreviewRuntime({
+      audio,
+      decoder,
+      project: document,
+      renderer,
+      sources: [source],
+    });
+
+    try {
+      await vi.waitFor(() => {
+        expect(decode).toHaveBeenCalledWith(
+          source,
+          0,
+          document.revision,
+          expect.any(String),
+          "clip:video-muted",
+          expect.any(Number),
+          expect.any(AbortSignal),
+        );
+      });
+      expect(runtime.getSnapshot().metrics.activeVideoLayers).toBe(1);
+
+      runtime.play();
+
+      await vi.waitFor(() => expect(audio.start).toHaveBeenCalledOnce());
+      expect(vi.mocked(audio.start).mock.calls[0]?.[0].clips).toEqual([
+        {
+          assetId: "asset-1",
+          id: "audio-live",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 1_000_000,
+          timelineStartUs: 0,
+        },
+      ]);
+      await vi.waitFor(() =>
+        expect(runtime.getSnapshot().metrics.audioActiveSources).toBe(1),
+      );
+    } finally {
+      runtime.dispose();
+      vi.unstubAllGlobals();
+    }
   });
 });
 

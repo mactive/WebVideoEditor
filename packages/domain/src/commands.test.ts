@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { CommandBus, type CommandEvent } from "./command-bus";
 import { applyProjectCommand, type ProjectCommand } from "./commands";
+import { createProjectDocument } from "./project";
 import { createTestProject } from "./test-fixture";
 
 const now = "2026-08-09T01:00:00.000Z";
@@ -70,6 +71,36 @@ describe("project commands", () => {
           "asset-1",
           "asset-2",
         ]),
+    },
+    {
+      command: {
+        type: "track.audio.add",
+        trackId: "audio-1",
+      },
+      verify: (project) =>
+        expect(project.tracks.at(-1)).toEqual({
+          id: "audio-1",
+          kind: "audio",
+          name: "音频",
+          order: 2,
+          muted: false,
+          locked: false,
+        }),
+    },
+    {
+      command: {
+        type: "track.video.add",
+        trackId: "video-2",
+      },
+      verify: (project) =>
+        expect(project.tracks.at(-1)).toEqual({
+          id: "video-2",
+          kind: "video",
+          name: "视频 2",
+          order: 2,
+          muted: false,
+          locked: false,
+        }),
     },
     {
       command: {
@@ -299,6 +330,14 @@ describe("CommandBus", () => {
       },
     },
     {
+      type: "track.audio.add",
+      trackId: "audio-1",
+    },
+    {
+      type: "track.video.add",
+      trackId: "video-2",
+    },
+    {
       type: "clip.add",
       clip: {
         id: "clip-3",
@@ -381,6 +420,52 @@ describe("CommandBus", () => {
 
     expect(bus.undo()).toEqual(initial);
     expect(bus.redo()).toEqual(applied);
+  });
+
+  it("creates a valid video track with generated defaults", () => {
+    const bus = new CommandBus(createTestProject(), { now: () => now });
+
+    const result = bus.execute({ type: "track.video.add" });
+
+    expect(result.tracks.at(-1)).toEqual({
+      id: "video-track-2",
+      kind: "video",
+      name: "视频 2",
+      order: 2,
+      muted: false,
+      locked: false,
+    });
+  });
+
+  it("creates multiple valid audio tracks with generated and explicit IDs", () => {
+    const project = createProjectDocument({
+      id: "project-audio",
+      name: "多音频轨工程",
+      now,
+    });
+    const bus = new CommandBus(project, { now: () => now });
+
+    let result = bus.execute({ type: "track.audio.add" });
+
+    expect(result.tracks.at(-1)).toEqual({
+      id: "audio-track-2",
+      kind: "audio",
+      name: "音频 2",
+      order: 3,
+      muted: false,
+      locked: false,
+    });
+
+    result = bus.execute({ type: "track.audio.add", trackId: "audio-custom" });
+
+    expect(result.tracks.at(-1)).toEqual({
+      id: "audio-custom",
+      kind: "audio",
+      name: "音频 3",
+      order: 4,
+      muted: false,
+      locked: false,
+    });
   });
 
   it("merges adjacent commands with the same transaction ID", () => {

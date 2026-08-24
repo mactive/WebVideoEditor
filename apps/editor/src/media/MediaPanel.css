@@ -197,8 +197,14 @@
   margin-top: 16px;
 }
 
-.media-panel__add {
+.media-panel__add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 14px;
+}
+
+.media-panel__add {
   padding: 8px 12px;
   max-width: 100%;
   color: #eef1ff;
@@ -208,6 +214,19 @@
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
+}
+
+.media-panel__add--audio {
+  color: #d7fff2;
+  background: #1f5d50;
+  border-color: #3fa58f;
+}
+
+.media-panel__add--secondary {
+  color: #b8c2d2;
+  background: #171d27;
+  border-color: #303746;
+  font-weight: 600;
 }
 
 .media-panel__add-strategy {

@@ -47,7 +47,9 @@ const runtimeMocks = vi.hoisted(() => {
     queuedPeak: 0,
   });
   const mock = {
+    activeAudioSources: 0,
     activeResources: 0,
+    activeVideoLayers: 0,
     activeVideoFrames: 0,
     audioQueueStats: undefined as QueueStats | undefined,
     heapSample: { available: false } as HeapSample,
@@ -80,7 +82,9 @@ const runtimeMocks = vi.hoisted(() => {
   return Object.assign(mock, {
     queue,
     reset() {
+      mock.activeAudioSources = 0;
       mock.activeResources = 0;
+      mock.activeVideoLayers = 0;
       mock.activeVideoFrames = 0;
       mock.audioQueueStats = undefined;
       mock.heapSample = { available: false };
@@ -139,7 +143,8 @@ vi.mock("@web-video-editor/preview-runtime", () => {
           ),
           metrics: {
             activeResources: runtimeMocks.activeResources,
-            audioActiveSources: 0,
+            activeVideoLayers: runtimeMocks.activeVideoLayers,
+            audioActiveSources: runtimeMocks.activeAudioSources,
             audioGeneration: 0,
             avDriftUs: 0,
             cacheHitRate: 1,
@@ -477,6 +482,8 @@ describe("PreviewPanel metrics disclosure", () => {
       usageBytes: 3 * 1024 * 1024,
     };
     runtimeMocks.activeResources = 5;
+    runtimeMocks.activeAudioSources = 3;
+    runtimeMocks.activeVideoLayers = 2;
     runtimeMocks.activeVideoFrames = 2;
     runtimeMocks.videoQueueStats = {
       active: 2,
@@ -518,8 +525,14 @@ describe("PreviewPanel metrics disclosure", () => {
       "非系统内存 · Worker heap N/A",
     );
     expect(screen.getByTestId("active-resources").textContent).toContain(
-      "活跃资源 5 · VideoFrame 2",
+      "活跃资源 5 · Video Layers 2 · Audio Sources 3 · VideoFrame 2",
     );
+    expect(
+      screen
+        .getByLabelText("预览指标")
+        .closest(".preview-panel")
+        ?.getAttribute("data-active-audio-sources"),
+    ).toBe("3");
     expect(screen.getByTestId("runtime-video-decoder").textContent).toContain(
       "Video Decode 2/1 · peak 3/5 · HWM 4 · bp 7",
     );

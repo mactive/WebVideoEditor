@@ -15,47 +15,50 @@ function compileEntities(
   profile: QualityProfile,
 ): RuntimeEntity[] {
   const scale = profile.width / project.canvas.width;
-  const clips = project.clips.map((clip): RuntimeEntity => {
-    const transform = clip.transform ?? {
-      rotationDeg: 0,
-      scale: 1,
-      x: 0.5,
-      y: 0.5,
-    };
-    return {
-      animation: { opacity: 0 },
-      effects: {
-        definitions: clip.effects.map((effect) => ({ ...effect })),
-        resolved: [],
-      },
-      id: `clip:${clip.id}`,
-      kind: "video",
-      render: {
-        order: trackOrder(project, clip.trackId),
-        visible: false,
-      },
-      timeline: {
-        active: false,
-        endUs: clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs,
-        localTimeUs: 0,
-        sourceStartUs: clip.sourceStartUs,
-        startUs: clip.timelineStartUs,
-      },
-      transform: {
-        height: profile.height,
-        rotationRad: (transform.rotationDeg * Math.PI) / 180,
-        scaleX: transform.scale,
-        scaleY: transform.scale,
-        width: profile.width,
-        x: transform.x * profile.width,
-        y: transform.y * profile.height,
-      },
-      video: {
-        assetId: clip.assetId,
-        requestedSourceTimeUs: clip.sourceStartUs,
-      },
-    };
-  });
+  const trackById = new Map(project.tracks.map((track) => [track.id, track]));
+  const clips = project.clips
+    .filter((clip) => trackById.get(clip.trackId)?.kind === "video")
+    .map((clip): RuntimeEntity => {
+      const transform = clip.transform ?? {
+        rotationDeg: 0,
+        scale: 1,
+        x: 0.5,
+        y: 0.5,
+      };
+      return {
+        animation: { opacity: 0 },
+        effects: {
+          definitions: clip.effects.map((effect) => ({ ...effect })),
+          resolved: [],
+        },
+        id: `clip:${clip.id}`,
+        kind: "video",
+        render: {
+          order: trackOrder(project, clip.trackId),
+          visible: false,
+        },
+        timeline: {
+          active: false,
+          endUs: clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs,
+          localTimeUs: 0,
+          sourceStartUs: clip.sourceStartUs,
+          startUs: clip.timelineStartUs,
+        },
+        transform: {
+          height: profile.height,
+          rotationRad: (transform.rotationDeg * Math.PI) / 180,
+          scaleX: transform.scale,
+          scaleY: transform.scale,
+          width: profile.width,
+          x: transform.x * profile.width,
+          y: transform.y * profile.height,
+        },
+        video: {
+          assetId: clip.assetId,
+          requestedSourceTimeUs: clip.sourceStartUs,
+        },
+      };
+    });
   const texts = project.texts.map((text): RuntimeEntity => ({
     animation: { opacity: 0 },
     effects: { definitions: [], resolved: [] },
@@ -133,17 +136,29 @@ export class ProjectRuntimeAdapter {
     const activeEntities = [...this.world]
       .filter((entity) => entity.timeline.active)
       .sort((left, right) => left.render.order - right.render.order);
-    const videoEntity = activeEntities.find((entity) => entity.video);
+    const activeVideos = activeEntities.flatMap((entity) =>
+      entity.video
+        ? [
+            {
+              assetId: entity.video.assetId,
+              entityId: entity.id,
+              order: entity.render.order,
+              sourceTimeUs: entity.video.requestedSourceTimeUs,
+            },
+          ]
+        : [],
+    );
     const evaluation: RuntimeEvaluation = {
       activeEntities,
+      activeVideos,
       ...counts,
       playheadUs,
       revision: project.revision,
-      video: videoEntity?.video
+      video: activeVideos[0]
         ? {
-            assetId: videoEntity.video.assetId,
-            entityId: videoEntity.id,
-            sourceTimeUs: videoEntity.video.requestedSourceTimeUs,
+            assetId: activeVideos[0].assetId,
+            entityId: activeVideos[0].entityId,
+            sourceTimeUs: activeVideos[0].sourceTimeUs,
           }
         : undefined,
     };

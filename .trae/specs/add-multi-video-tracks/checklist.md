@@ -1,0 +1,35 @@
+# Checklist
+
+- [x] Project Document 能保存多个 `kind: "video"` 和多个 `kind: "audio"` 轨道，旧工程默认轨道不受影响。
+- [x] 新增视频轨道和新增音频轨道都通过正式 Command Bus 完成，并产生唯一 id、稳定 order、默认未静音且未锁定。
+- [x] 时间线按轨道 order 上下渲染多行视频轨和多行音频轨，轨道数量没有硬编码上限。
+- [x] 用户可以分别选择当前目标视频轨道和当前目标音频轨道。
+- [x] “添加到时间线”不会强制追加到 00:00 或轨尾；默认可添加到当前播放头。
+- [x] 用户可以控制每个片段的 `timelineStartUs`，不同轨道上的内容可以从不同工程时间开始。
+- [x] 同一个 asset 可以被重复添加为多个不同视频片段和多个不同音频片段。
+- [x] 同一个轨道内的片段时间重叠会被校验拒绝。
+- [x] 不同视频轨道、不同音频轨道之间的片段可以在同一时间段重叠。
+- [x] append/move/trim/split/delete 只参考当前片段所在轨道的相邻片段。
+- [x] 播放头拖动后，所有视频轨道和音频轨道按同一 playhead 求值。
+- [x] 播放、暂停和逐帧对多音视频轨工程仍可用。
+- [x] Undo/Redo 和 Inspector transform 对多轨视频片段仍可用。
+- [x] RuntimeEvaluation 输出所有 active video entity，并按轨道 order 排序。
+- [x] 预览解码调度会为同一 playhead 的所有 active video entity 请求帧。
+- [x] 过期 requestId、projectRevision 或 entityId 的视频帧不会覆盖最新画面。
+- [x] PixiJS 预览为每个 active video entity 使用独立渲染资源。
+- [x] 多个视频层在预览中按轨道 order 叠放，order 更大的轨道位于上方。
+- [x] 每个视频层保留自己的位置、缩放、旋转和滤镜效果。
+- [x] 预览音频会混合同一 playhead 上所有未静音音频轨的 active audio clip。
+- [x] Seek、暂停或工程 revision 变化后，旧音频缓冲不会继续播放。
+- [x] 预览 UI 或日志能观察 active video layers、active audio sources、视频/音频解码队列和背压计数。
+- [x] 导出每帧会合成所有 active video entity，而不是只取第一个视频。
+- [x] 导出音频会按工程时间混合所有未静音音频轨的 active audio clip。
+- [x] 导出合成使用原素材 source，不使用 proxy。
+- [x] 导出结果关键画面能证明至少两个重叠视频轨道同时生效。
+- [x] 导出音频证据能证明至少两个音频轨按不同开始时间进入同一输出。
+- [x] 多音视频导出保留非默认 transform、滤镜和音频裁剪区间。
+- [x] 相关 domain/editor/media-runtime/preview-runtime/export Vitest 通过。
+- [x] editor typecheck 通过。
+- [x] 相关 Playwright 主流程用例通过，覆盖新增 V2/A2、重复添加、不同起点、Seek、播放/暂停和叠加预览。
+- [x] 相关导出 E2E 通过，覆盖重叠视频轨道、重叠音频轨道、多层合成和音频混音。
+- [x] 文档说明多音视频轨能力、上下叠放顺序、添加起点策略、音频混音和旧工程兼容边界。

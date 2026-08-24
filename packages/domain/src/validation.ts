@@ -70,11 +70,18 @@ export function validateProjectInvariants(
         message: `素材 "${clip.assetId}" 不存在`,
       });
     }
-    if (!track || track.kind !== "video") {
+    if (!track || track.kind === "text") {
       issues.push({
         code: "invalid_reference",
         path: `${path}.trackId`,
-        message: `轨道 "${clip.trackId}" 不存在或不是视频轨`,
+        message: `轨道 "${clip.trackId}" 不存在或不是媒体轨`,
+      });
+    }
+    if (track?.kind === "audio" && asset && !asset.hasAudio) {
+      issues.push({
+        code: "invalid_reference",
+        path: `${path}.assetId`,
+        message: "音频轨片段必须引用包含音频的素材",
       });
     }
     if (clip.sourceStartUs >= clip.sourceEndUs) {
@@ -113,6 +120,10 @@ export function validateProjectInvariants(
 
   const clipsByTrack = new Map<string, typeof project.clips>();
   for (const clip of project.clips) {
+    const track = tracks.get(clip.trackId);
+    if (!track || track.kind === "text") {
+      continue;
+    }
     const clips = clipsByTrack.get(clip.trackId) ?? [];
     clips.push(clip);
     clipsByTrack.set(clip.trackId, clips);

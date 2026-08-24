@@ -19,12 +19,17 @@ export function projectDurationUs(project: ProjectDocument): number {
   return Math.max(1_000_000, clipEnd, textEnd);
 }
 
-export function appendTimelineStartUs(project: ProjectDocument): number {
-  return project.clips.reduce(
-    (maximum, clip) =>
-      Math.max(maximum, clip.timelineStartUs + clipDurationUs(clip)),
-    0,
-  );
+export function appendTimelineStartUs(
+  project: ProjectDocument,
+  trackId?: string,
+): number {
+  return project.clips
+    .filter((clip) => !trackId || clip.trackId === trackId)
+    .reduce(
+      (maximum, clip) =>
+        Math.max(maximum, clip.timelineStartUs + clipDurationUs(clip)),
+      0,
+    );
 }
 
 export function clampClipMove(
@@ -32,9 +37,13 @@ export function clampClipMove(
   clipId: string,
   proposedStartUs: number,
 ): number {
-  const sorted = [...project.clips].sort(
-    (left, right) => left.timelineStartUs - right.timelineStartUs,
-  );
+  const targetClip = project.clips.find((clip) => clip.id === clipId);
+  if (!targetClip) {
+    return 0;
+  }
+  const sorted = project.clips
+    .filter((clip) => clip.trackId === targetClip.trackId)
+    .sort((left, right) => left.timelineStartUs - right.timelineStartUs);
   const index = sorted.findIndex((clip) => clip.id === clipId);
   const clip = sorted[index];
   if (!clip) {

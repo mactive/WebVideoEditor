@@ -49,7 +49,7 @@ const cancelled = new Set<string>();
 const decodeTasks = new Map<string, DecoderQueueTaskHandle<void>>();
 const decoderQueue = new MediabunnyDecoderQueueAdapter("VideoDecoder", {
   concurrency: 1,
-  highWatermark: 1,
+  highWatermark: 8,
   logger,
   overflowPolicy: "replace-oldest",
 });
@@ -66,6 +66,10 @@ function queueFields() {
     decodeQueue: decoderQueueStats.applicationQueue.queued,
     decoderQueue: decoderQueueStats,
   };
+}
+
+function requestKey(requestId: string, entityId: string): string {
+  return `${requestId}::${entityId}`;
 }
 
 function nearestKeyframeUs(request: PreviewDecodeRequest): number {
@@ -114,11 +118,14 @@ async function decoderFor(
   return decoder;
 }
 
-function isObsolete(requestId: string, signal?: AbortSignal): boolean {
+function isObsolete(
+  request: Pick<PreviewDecodeRequest, "entityId" | "requestId">,
+  signal?: AbortSignal,
+): boolean {
   return (
     signal?.aborted === true ||
-    cancelled.has(requestId) ||
-    requestId !== latestRequestId
+    cancelled.has(requestKey(request.requestId, request.entityId)) ||
+    request.requestId !== latestRequestId
   );
 }
 
@@ -139,7 +146,7 @@ async function sampleAt(
     } else {
       sample.close();
     }
-    if (isObsolete(request.requestId, signal)) {
+    if (isObsolete(request, signal)) {
       selected?.close();
       return null;
     }
@@ -158,6 +165,7 @@ async function decode(
       event: "request",
       input: {
         decodeFromUs,
+        entityId: request.entityId,
         sourceTimeUs: request.sourceTimeUs,
       },
       level: "debug",
@@ -179,11 +187,14 @@ async function decode(
   try {
     const { track } = await decoderFor(request.cacheKey, request.mediaUrl);
     const sample = await sampleAt(request, track, decodeFromUs, signal);
-    if (!sample || isObsolete(request.requestId, signal)) {
+    if (!sample || isObsolete(request, signal)) {
       sample?.close();
       post({
+        entityId: request.entityId,
         ...queueFields(),
-        reason: cancelled.has(request.requestId) ? "cancelled" : "superseded",
+        reason: cancelled.has(requestKey(request.requestId, request.entityId))
+          ? "cancelled"
+          : "superseded",
         requestId: request.requestId,
         type: "preview.dropped",
         version: PREVIEW_DECODE_PROTOCOL_VERSION,
@@ -191,7 +202,10 @@ async function decode(
       if (request.diagnosticLogs) {
         logger.log({
           event: "frame.dropped",
-          input: { sourceTimeUs: request.sourceTimeUs },
+          input: {
+            entityId: request.entityId,
+            sourceTimeUs: request.sourceTimeUs,
+          },
           level: "debug",
           marker: "[DECODE]",
           output: { reason: "superseded" },
@@ -207,9 +221,10 @@ async function decode(
     const frameHeight = frame.displayHeight;
     const frameWidth = frame.displayWidth;
     sample.close();
-    if (isObsolete(request.requestId, signal)) {
+    if (isObsolete(request, signal)) {
       frame.close();
       post({
+        entityId: request.entityId,
         ...queueFields(),
         reason: "superseded",
         requestId: request.requestId,
@@ -221,6 +236,7 @@ async function decode(
     post(
       {
         decodeFromUs,
+        entityId: request.entityId,
         ...queueFields(),
         frame,
         generation: request.generation,
@@ -251,6 +267,7 @@ async function decode(
     }
   } catch (error) {
     post({
+      entityId: request.entityId,
       ...queueFields(),
       error: error instanceof Error ? error.message : String(error),
       projectRevision: request.projectRevision,
@@ -273,7 +290,7 @@ async function decode(
       });
     }
   } finally {
-    cancelled.delete(request.requestId);
+    cancelled.delete(requestKey(request.requestId, request.entityId));
   }
 }
 
@@ -288,24 +305,27 @@ endpoint.addEventListener(
       return;
     }
     if (request.operation === "cancel") {
-      cancelled.add(request.requestId);
+      const key = requestKey(request.requestId, request.entityId);
+      cancelled.add(key);
       decodeTasks
-        .get(request.requestId)
+        .get(key)
         ?.cancel(request.reason ?? "Preview decode cancelled");
       return;
     }
     diagnosticLogsEnabled = request.diagnosticLogs;
     latestRequestId = request.requestId;
-    const task = decoderQueue.schedule(request.requestId, (signal) =>
+    const key = requestKey(request.requestId, request.entityId);
+    const task = decoderQueue.schedule(key, (signal) =>
       decode(request, signal),
     );
-    decodeTasks.set(request.requestId, task);
+    decodeTasks.set(key, task);
     void task.result
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           post({
+            entityId: request.entityId,
             ...queueFields(),
-            reason: cancelled.has(request.requestId)
+            reason: cancelled.has(key)
               ? "cancelled"
               : "superseded",
             requestId: request.requestId,
@@ -317,10 +337,11 @@ endpoint.addEventListener(
         throw error;
       })
       .finally(() => {
-        if (decodeTasks.get(request.requestId) === task) {
-          decodeTasks.delete(request.requestId);
+        if (decodeTasks.get(key) === task) {
+          decodeTasks.delete(key);
         }
         post({
+          entityId: request.entityId,
           ...queueFields(),
           requestId: request.requestId,
           type: "preview.queue",

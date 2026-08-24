@@ -74,6 +74,27 @@ async function previewPlayheadUs(page: Page) {
   return previewSnapshot(page).then((snapshot) => snapshot.metrics.playheadUs);
 }
 
+async function projectJson(page: Page) {
+  await page.getByRole("button", { name: "Project JSON", exact: true }).click();
+  const value = await page.getByTestId("project-json").textContent();
+  return JSON.parse(value ?? "{}") as {
+    clips: Array<{
+      assetId: string;
+      sourceEndUs: number;
+      sourceStartUs: number;
+      timelineStartUs: number;
+      trackId: string;
+      transform?: {
+        rotationDeg: number;
+        scale: number;
+        x: number;
+        y: number;
+      };
+    }>;
+    tracks: Array<{ id: string; kind: string; name: string; order: number }>;
+  };
+}
+
 async function blurActiveElement(page: Page) {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -81,6 +102,135 @@ async function blurActiveElement(page: Page) {
     }
   });
 }
+
+async function fillInspectorNumber(page: Page, label: string, value: string) {
+  const input = page.getByLabel(label);
+  await input.fill(value);
+  await input.blur();
+}
+
+test("adds the same source to V1/V2/A1/A2 with distinct starts and transports all active layers", async ({
+  page,
+}) => {
+  test.setTimeout(5 * 60_000);
+  await page.goto("/");
+  const { mediaItem, panel } = await importTestOneIntoTimeline(page);
+  await fillInspectorNumber(page, "时间线起点（秒）", "0.1");
+
+  await mediaItem.getByRole("button", { name: "添加音频到时间线" }).click();
+  await fillInspectorNumber(page, "时间线起点（秒）", "0.2");
+
+  await page.getByRole("button", { name: "新增视频轨" }).click();
+  await expect(page.getByRole("button", { name: "V2 视频 2" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await mediaItem.getByRole("button", { name: /添加到时间线/ }).click();
+  await fillInspectorNumber(page, "时间线起点（秒）", "0.3");
+  await expect(page.getByTestId("video-track-video-track")).toContainText(
+    "test_1.mp4",
+  );
+  await expect(page.getByTestId("video-track-video-track-2")).toContainText(
+    "test_1.mp4",
+  );
+
+  await page.getByLabel("片段位置 X").fill("0.68");
+  await page.getByLabel("片段位置 Y").fill("0.62");
+  await page.getByLabel("片段缩放").fill("0.58");
+  await page.getByLabel("片段旋转").fill("18");
+
+  await page.getByRole("button", { name: "新增音频轨" }).click();
+  await expect(page.getByRole("button", { name: "A2 音频 2" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await mediaItem.getByRole("button", { name: "添加音频到时间线" }).click();
+  await fillInspectorNumber(page, "时间线起点（秒）", "0.4");
+  await expect(page.locator("[data-clip-id]")).toHaveCount(4);
+  await expect(page.getByTestId("audio-track")).toContainText("test_1.mp4");
+  await expect(page.getByTestId("audio-track-audio-track-2")).toContainText(
+    "test_1.mp4",
+  );
+
+  const project = await projectJson(page);
+  const videoTracks = project.tracks
+    .filter((track) => track.kind === "video")
+    .sort((left, right) => left.order - right.order);
+  const audioTracks = project.tracks
+    .filter((track) => track.kind === "audio")
+    .sort((left, right) => left.order - right.order);
+  const clipByTrack = new Map(
+    project.clips.map((clip) => [clip.trackId, clip]),
+  );
+  expect(videoTracks.map((track) => track.id)).toEqual([
+    "video-track",
+    "video-track-2",
+  ]);
+  expect(audioTracks.map((track) => track.id)).toEqual([
+    "audio-track",
+    "audio-track-2",
+  ]);
+  expect(project.clips).toHaveLength(4);
+  expect(new Set(project.clips.map((clip) => clip.assetId)).size).toBe(1);
+  expect([...clipByTrack.keys()].sort()).toEqual([
+    "audio-track",
+    "audio-track-2",
+    "video-track",
+    "video-track-2",
+  ]);
+  expect(clipByTrack.get("video-track")?.timelineStartUs).toBe(100_000);
+  expect(clipByTrack.get("audio-track")?.timelineStartUs).toBe(200_000);
+  expect(clipByTrack.get("video-track-2")?.timelineStartUs).toBe(300_000);
+  expect(clipByTrack.get("audio-track-2")?.timelineStartUs).toBe(400_000);
+  expect(clipByTrack.get("video-track-2")?.transform).toMatchObject({
+    rotationDeg: 18,
+    scale: 0.58,
+    x: 0.68,
+    y: 0.62,
+  });
+
+  const slider = page.getByRole("slider", { name: "预览播放头" });
+  await slider.fill("800000");
+  await expect.poll(() => previewPlayheadUs(page)).toBe(800_000);
+  await expect
+    .poll(() =>
+      previewSnapshot(page).then(
+        (snapshot) => snapshot.metrics.activeVideoLayers,
+      ),
+    )
+    .toBe(2);
+  await expect
+    .poll(
+      async () => Number(await panel.getAttribute("data-presented-frames")),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(1);
+  expect(await canvasNonBlackPixels(page)).toBeGreaterThan(10_000);
+
+  await blurActiveElement(page);
+  await page.keyboard.press("Space");
+  await expect
+    .poll(() => previewSnapshot(page).then((snapshot) => snapshot.playing))
+    .toBe(true);
+  await expect
+    .poll(() =>
+      previewSnapshot(page).then(
+        (snapshot) => snapshot.metrics.audioActiveSources,
+      ),
+    )
+    .toBeGreaterThan(1);
+  await page.keyboard.press("Space");
+  await expect
+    .poll(() => previewSnapshot(page).then((snapshot) => snapshot.playing))
+    .toBe(false);
+  await expect
+    .poll(() =>
+      previewSnapshot(page).then(
+        (snapshot) => snapshot.metrics.audioActiveSources,
+      ),
+    )
+    .toBe(0);
+});
 
 test("keeps the direct preview frame visible when proxy becomes ready", async ({
   page,
@@ -329,7 +479,7 @@ test("renders test_1 proxy, keeps latest seek, and releases frames", async ({
     .toBe(0);
   await expect(panel).toHaveAttribute("data-decode-active", "0");
   await expect(panel).toHaveAttribute("data-decode-queued", "0");
-  await expect(panel).toHaveAttribute("data-decode-hwm", "1");
+  await expect(panel).toHaveAttribute("data-decode-hwm", "8");
 
   const pixels = await page.locator("canvas").evaluate((canvas) => {
     const source = canvas as HTMLCanvasElement;

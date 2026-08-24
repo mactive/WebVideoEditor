@@ -20,9 +20,15 @@ flowchart LR
   MUX --> OPFS[".tmp requestId -> final MP4"]
 ```
 
-视频按 export frameRate 遍历工程时间，ECS 找到当前 Clip/Title/Effect，原素材 sample 在
-OffscreenCanvas 合成；每个 VideoFrame 编码后立即 close。音频按 Clip 源区间裁剪，线性
-重采样到 48kHz 双声道，时间戳归一到工程时间。codec 队列高水位为 8。
+视频按 export frameRate 遍历工程时间，ECS 找到当前所有 active video Clip、Title 和 Effect。
+Export Worker 为每个 active video entity 从原素材读取对应 `VideoSample`，再按
+`activeEntities` 的 render order 在 OffscreenCanvas 上合成；order 小的轨道先画，order 大的
+轨道后画，因此 V2 会叠在 V1 之上。每个视频层独立应用自己的位置、缩放、旋转、滤镜和 opacity；
+每个 VideoFrame 编码后立即 close。
+
+音频按所有未静音音频轨 Clip 的源区间裁剪，线性重采样到 48kHz 双声道后按工程时间写入固定
+编码 chunk。不同音频轨可以在同一时间重叠，样本会加和混合并在写入 `AudioData` 前限幅到
+`[-1, 1]`；静音音频轨和不含音频的素材不会进入混音。codec 队列高水位为 8。
 
 成功后先 finalize Mux，再把临时文件复制为 `export-<requestId>.mp4` 并删除 `.tmp-`。
 取消会 cancel Output、关闭 codec/Input、删除临时和未完成 final；下载 URL 在替换或组件
@@ -35,6 +41,10 @@ OffscreenCanvas 合成；每个 VideoFrame 编码后立即 close。音频按 Cli
 可由 `<video>` 再解码且 OPFS 无 `.tmp-`。
 
 扩展 E2E 还验证取消后重启、2 秒/60 帧、标题亮像素、复古滤镜红蓝差、AAC 音频和重新导入。
+Task 18 导出用例构造 V1/V2 重叠视频轨道，并通过关键帧像素对比证明同一帧同时包含底层画面、
+上层 transformed 画面和标题；同时构造 A1/A2 重叠音频轨道，使用偏移的 A2 尾部约束导出时长
+和音频 packet 末端时间，证明多轨混音结果进入 MP4。用例还断言 `[EXPORT] started/completed`
+worker 日志的输入仍为 `source=original`。
 这些是断言，不是固定导出耗时。
 
 ## 复现与预期输出

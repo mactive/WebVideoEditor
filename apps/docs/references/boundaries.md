@@ -8,7 +8,7 @@
 | [Mediabunny](https://github.com/Vanilagy/mediabunny) / [文档](https://mediabunny.dev/)                     | 浏览器流式 I/O、容器、sample/packet、Mux | 固定 `1.53.0`，用于 Probe、Demux、sample、MP4 Output      | 不把其官网 benchmark 转述为本机结论                  |
 | [WebAV](https://github.com/WebAV-Tech/WebAV)                                                               | WebCodecs 上的 Clip/组合 SDK 抽象        | 参考“浏览器原生编辑 SDK”问题域；本仓库自己定义 Domain/ECS | 未依赖 `av-cliper`，未复制其组合实现                 |
 | [OpenReel Video](https://github.com/Augani/openreel-video)                                                 | 完整开源编辑器的产品边界                 | 只作为功能范围参照                                        | 未运行该仓库，不能声称架构或性能等价                 |
-| [FreeCut](https://github.com/walterlow/freecut)                                                            | 本地优先时间线、OPFS、WebCodecs          | 参考本地文件/代理/导出的边界问题                          | 本 Demo 仍是单视频轨学习项目，无其多轨/专业功能承诺  |
+| [FreeCut](https://github.com/walterlow/freecut)                                                            | 本地优先时间线、OPFS、WebCodecs          | 参考本地文件/代理/导出的边界问题                          | 本 Demo 已实现基础多音视频轨叠加与混音，但不承诺完整专业 NLE 功能 |
 | [Wazplay README](https://github.com/emdiple/wasplay/blob/main/README.md)                                   | Rust/WASM 模块化媒体处理                 | 本仓库只把波形/时间数学/摘要放 WASM                       | 未采用其 Rust 容器/渲染实现；仓库 URL 名为 `wasplay` |
 | [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm) / [FAQ](https://ffmpegwasm.netlify.app/docs/faq/) | 浏览器端 FFmpeg、格式兜底                | 仅保留为未来不兼容格式的候选边界                          | 不进入 Probe/Proxy/Preview/Export 主路径             |
 | [WebCodecs 标准](https://w3c.github.io/webcodecs/)                                                         | codec API 但不保证具体 codec             | 每次调用 `isConfigSupported`                              | 不以“有 WebCodecs”推断 H.264/AAC 必然可用            |
@@ -30,7 +30,7 @@ pnpm --filter @web-video-editor/editor build
 ```
 
 ```text
-UI: 仍只暴露一个视频轨、对应音频轨、一个文字轨
+UI: 暴露可新增的视频轨与音频轨；默认旧工程轨为 V1/A1/T1；跨轨重叠合法，同轨重叠仍会被拒绝
 Console: 主路径 marker 为 [IMPORT]/[DEMUX]/[DECODE]/[EXPORT]
 CLI: 构建产物包含 media/export/preview worker 与 media_wasm_bg.wasm
 CLI: package.json 依赖包含 mediabunny，不包含 WebAV/OpenReel/FreeCut/Wazplay/ffmpeg.wasm

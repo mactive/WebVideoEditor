@@ -15,9 +15,18 @@ flowchart LR
 ```
 
 Project revision、quality profile 尺寸不变时复用 Entity；revision 变化时更新、创建或释放。
-Scene Graph 只保留当前运行对象：一个视频 Sprite、可见 Text 节点和效果 Filter，不反向写
-Project。预览 profile 最大 `960×540`；导出 profile 使用 Project exportSettings，但复用
-同一 ECS 求值和效果归一化。
+Scene Graph 只保留当前运行对象：每个 active video entity 一个独立视频 Sprite/Texture，
+可见 Text 节点和效果 Filter，不反向写 Project。预览 profile 最大 `960×540`；导出 profile
+使用 Project exportSettings，但复用同一 ECS 求值和效果归一化。
+
+多视频轨道时，`ProjectRuntimeAdapter.evaluate(...)` 返回按轨道 `order` 排序的
+`activeVideos` 和 `activeEntities`。order 小的轨道先绘制，order 大的轨道后绘制，因此 V2
+位于 V1 上方。每个视频层保留自己的 transform、effects 和 opacity；播放头、Seek、播放/暂停
+仍由同一个工程时间驱动所有层。
+
+音频轨道不进入 Pixi Scene Graph；PreviewRuntime 会从 Project 中筛出未静音的音频轨 Clip，
+按同一播放头交给音频播放模块调度，导出管线则按工程时间把所有可听音频片段混入同一 AAC 输出。
+因此视频层叠放由 ECS render order 决定，音频叠加由播放/导出阶段的 mixer 决定。
 
 PixiJS v8 当前明确选择 `preference: "webgl"`。Worker 返回的 VideoFrame 先绘入主线程
 frame canvas，再更新 Pixi Texture；消费后由 PreviewRuntime 的 `finally` 调用

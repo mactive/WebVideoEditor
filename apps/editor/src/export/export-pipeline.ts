@@ -46,6 +46,7 @@ import {
 
 const AUDIO_SAMPLE_RATE = 48_000;
 const AUDIO_CHANNELS = 2;
+const AUDIO_ENCODER_CHUNK_FRAMES = 1024;
 const CODEC_QUEUE_HIGH_WATERMARK = 8;
 const VIDEO_CODEC = "avc1.640028";
 const AUDIO_CODEC = "mp4a.40.2";
@@ -72,6 +73,20 @@ type OutputFile = {
   target: StreamTarget;
   tempName: string;
   commit(): Promise<File>;
+};
+
+export type PlanarAudioMixInput = {
+  channelData: readonly Float32Array[];
+  numberOfFrames: number;
+  sampleRate: number;
+  timelineStartUs: number;
+};
+
+export type MixedAudioChunk = {
+  data: Float32Array;
+  frames: number;
+  index: number;
+  timestampUs: number;
 };
 
 function sourceAdapter(source: BrowserMediaSource): Source {
@@ -261,23 +276,25 @@ function drawText(
   context.restore();
 }
 
-function composeFrame(
+export function composeFrame(
   canvas: OffscreenCanvas,
   context: OffscreenCanvasRenderingContext2D,
   backgroundColor: string,
   entities: readonly RuntimeEntity[],
-  sample: VideoSample | null,
+  samplesByEntity: ReadonlyMap<string, VideoSample>,
 ): void {
   context.filter = "none";
   context.globalAlpha = 1;
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.fillStyle = backgroundColor;
   context.fillRect(0, 0, canvas.width, canvas.height);
-  const videoEntity = entities.find((entity) => entity.video);
-  if (sample && videoEntity) {
-    drawVideo(context, canvas, sample, videoEntity);
-  }
   for (const entity of entities) {
+    if (entity.video) {
+      const sample = samplesByEntity.get(entity.id);
+      if (sample) {
+        drawVideo(context, canvas, sample, entity);
+      }
+    }
     if (entity.text) {
       drawText(context, entity);
     }
@@ -363,46 +380,129 @@ function aacAudioSpecificConfig(
   return new Uint8Array([value >> 8, value & 0xff]);
 }
 
-function audioDataFromSample(
-  sample: AudioSample,
-  timestampUs: number,
-): AudioData {
-  const targetFrames = Math.max(
-    1,
-    Math.round((sample.numberOfFrames * AUDIO_SAMPLE_RATE) / sample.sampleRate),
+function outputAudioFrameCount(durationUs: number): number {
+  return Math.max(1, Math.ceil((durationUs * AUDIO_SAMPLE_RATE) / 1_000_000));
+}
+
+function mixedAudioChunkTimestampUs(chunkIndex: number): number {
+  return Math.round(
+    (chunkIndex * AUDIO_ENCODER_CHUNK_FRAMES * 1_000_000) / AUDIO_SAMPLE_RATE,
   );
-  const sourcePlanes: Float32Array[] = [];
+}
+
+function createMixedAudioChunk(
+  chunkIndex: number,
+  totalFrames: number,
+): MixedAudioChunk {
+  const chunkStartFrame = chunkIndex * AUDIO_ENCODER_CHUNK_FRAMES;
+  const frames = Math.max(
+    0,
+    Math.min(AUDIO_ENCODER_CHUNK_FRAMES, totalFrames - chunkStartFrame),
+  );
+  return {
+    data: new Float32Array(frames * AUDIO_CHANNELS),
+    frames,
+    index: chunkIndex,
+    timestampUs: mixedAudioChunkTimestampUs(chunkIndex),
+  };
+}
+
+function ensureMixedAudioChunk(
+  chunks: Map<number, MixedAudioChunk>,
+  chunkIndex: number,
+  totalFrames: number,
+): MixedAudioChunk {
+  const existing = chunks.get(chunkIndex);
+  if (existing) {
+    return existing;
+  }
+  const chunk = createMixedAudioChunk(chunkIndex, totalFrames);
+  chunks.set(chunkIndex, chunk);
+  return chunk;
+}
+
+export function mixPlanarAudioIntoChunks(
+  chunks: Map<number, MixedAudioChunk>,
+  input: PlanarAudioMixInput,
+  durationUs: number,
+): void {
+  if (
+    input.numberOfFrames <= 0 ||
+    input.sampleRate <= 0 ||
+    input.channelData.length === 0
+  ) {
+    return;
+  }
+  const totalFrames = outputAudioFrameCount(durationUs);
+  const outputStartFrame = Math.max(
+    0,
+    Math.round((input.timelineStartUs * AUDIO_SAMPLE_RATE) / 1_000_000),
+  );
+  const resampledFrames = Math.max(
+    1,
+    Math.round((input.numberOfFrames * AUDIO_SAMPLE_RATE) / input.sampleRate),
+  );
+
+  for (let frame = 0; frame < resampledFrames; frame += 1) {
+    const timelineFrame = outputStartFrame + frame;
+    if (timelineFrame >= totalFrames) {
+      break;
+    }
+    const chunkIndex = Math.floor(timelineFrame / AUDIO_ENCODER_CHUNK_FRAMES);
+    const chunk = ensureMixedAudioChunk(chunks, chunkIndex, totalFrames);
+    const localFrame = timelineFrame - chunkIndex * AUDIO_ENCODER_CHUNK_FRAMES;
+    if (localFrame >= chunk.frames) {
+      continue;
+    }
+    const sourcePosition =
+      resampledFrames === 1
+        ? 0
+        : (frame * (input.numberOfFrames - 1)) / (resampledFrames - 1);
+    const sourceLeft = Math.floor(sourcePosition);
+    const sourceRight = Math.min(input.numberOfFrames - 1, sourceLeft + 1);
+    const mix = sourcePosition - sourceLeft;
+
+    for (let channel = 0; channel < AUDIO_CHANNELS; channel += 1) {
+      const source =
+        input.channelData[Math.min(channel, input.channelData.length - 1)];
+      const value = source
+        ? (source[sourceLeft] ?? 0) * (1 - mix) +
+          (source[sourceRight] ?? 0) * mix
+        : 0;
+      const offset = channel * chunk.frames + localFrame;
+      chunk.data[offset] = (chunk.data[offset] ?? 0) + value;
+    }
+  }
+}
+
+function audioDataFromMixedChunk(chunk: MixedAudioChunk): AudioData {
+  const data = new Float32Array(chunk.data.length);
+  for (let index = 0; index < chunk.data.length; index += 1) {
+    data[index] = Math.max(-1, Math.min(1, chunk.data[index] ?? 0));
+  }
+  return new AudioData({
+    data,
+    format: "f32-planar",
+    numberOfChannels: AUDIO_CHANNELS,
+    numberOfFrames: chunk.frames,
+    sampleRate: AUDIO_SAMPLE_RATE,
+    timestamp: chunk.timestampUs,
+  });
+}
+
+function planarAudioFromSample(sample: AudioSample): PlanarAudioMixInput {
+  const channelData: Float32Array[] = [];
   for (let channel = 0; channel < sample.numberOfChannels; channel += 1) {
     const plane = new Float32Array(sample.numberOfFrames);
     sample.copyTo(plane, { format: "f32-planar", planeIndex: channel });
-    sourcePlanes.push(plane);
+    channelData.push(plane);
   }
-  const output = new Float32Array(targetFrames * AUDIO_CHANNELS);
-  for (let channel = 0; channel < AUDIO_CHANNELS; channel += 1) {
-    const source =
-      sourcePlanes[Math.min(channel, sourcePlanes.length - 1)] ??
-      new Float32Array(sample.numberOfFrames);
-    const outputOffset = channel * targetFrames;
-    for (let frame = 0; frame < targetFrames; frame += 1) {
-      const sourcePosition =
-        targetFrames === 1
-          ? 0
-          : (frame * (source.length - 1)) / (targetFrames - 1);
-      const left = Math.floor(sourcePosition);
-      const right = Math.min(source.length - 1, left + 1);
-      const mix = sourcePosition - left;
-      output[outputOffset + frame] =
-        (source[left] ?? 0) * (1 - mix) + (source[right] ?? 0) * mix;
-    }
-  }
-  return new AudioData({
-    data: output,
-    format: "f32-planar",
-    numberOfChannels: AUDIO_CHANNELS,
-    numberOfFrames: targetFrames,
-    sampleRate: AUDIO_SAMPLE_RATE,
-    timestamp: timestampUs,
-  });
+  return {
+    channelData,
+    numberOfFrames: sample.numberOfFrames,
+    sampleRate: sample.sampleRate,
+    timelineStartUs: 0,
+  };
 }
 
 async function resolveEncoderConfigs(
@@ -461,17 +561,23 @@ async function resolveEncoderConfigs(
   };
 }
 
+export function audibleAudioClips(
+  project: ProjectDocument,
+): ProjectDocument["clips"] {
+  const tracks = new Map(project.tracks.map((track) => [track.id, track]));
+  const assets = new Map(project.assets.map((asset) => [asset.id, asset]));
+  return project.clips.filter((clip) => {
+    const track = tracks.get(clip.trackId);
+    if (track?.kind !== "audio" || track.muted) {
+      return false;
+    }
+    const asset = assets.get(clip.assetId);
+    return asset?.hasAudio === true && clip.sourceEndUs > clip.sourceStartUs;
+  });
+}
+
 function shouldExportAudio(project: ProjectDocument): boolean {
-  const audioTrack = project.tracks.find((track) => track.kind === "audio");
-  return (
-    audioTrack?.muted !== true &&
-    project.clips.some((clip) => {
-      const asset = project.assets.find(
-        (candidate) => candidate.id === clip.assetId,
-      );
-      return asset?.hasAudio === true;
-    })
-  );
+  return audibleAudioClips(project).length > 0;
 }
 
 export async function exportProjectToMp4(
@@ -715,11 +821,16 @@ export async function exportProjectToMp4(
         Math.min(nominalFrameDurationUs, durationUs - timestampUs),
       );
       const evaluation = adapter.evaluate(project, timestampUs, requestId);
-      const clipId = evaluation.video?.entityId.replace(/^clip:/, "");
-      const sampleIterator = clipId ? clipSamples.get(clipId) : undefined;
-      const nextSample = sampleIterator
-        ? await videoDecoderQueue.schedule(
-            `${requestId}.video.${frameIndex}`,
+      const samplesByEntity = new Map<string, VideoSample>();
+      try {
+        for (const activeVideo of evaluation.activeVideos) {
+          const clipId = activeVideo.entityId.replace(/^clip:/, "");
+          const sampleIterator = clipSamples.get(clipId);
+          if (!sampleIterator) {
+            continue;
+          }
+          const nextSample = await videoDecoderQueue.schedule(
+            `${requestId}.video.${frameIndex}.${activeVideo.entityId}`,
             async (queueSignal) => {
               queueSignal.throwIfAborted();
               const next = await sampleIterator.next();
@@ -727,19 +838,23 @@ export async function exportProjectToMp4(
               return next;
             },
             signal,
-          ).result
-        : undefined;
-      const sample = nextSample?.value ?? null;
-      try {
+          ).result;
+          const sample = nextSample.value ?? null;
+          if (sample) {
+            samplesByEntity.set(activeVideo.entityId, sample);
+          }
+        }
         composeFrame(
           canvas,
           context,
           project.canvas.backgroundColor,
           evaluation.activeEntities,
-          sample,
+          samplesByEntity,
         );
       } finally {
-        sample?.close();
+        for (const sample of samplesByEntity.values()) {
+          sample.close();
+        }
       }
       const frame = new VideoFrame(canvas, {
         duration,
@@ -789,10 +904,18 @@ export async function exportProjectToMp4(
     adapter.dispose();
 
     if (audioEncoder && audioSource) {
-      for (const clip of [...project.clips].sort(
+      const mixedChunks = new Map<number, MixedAudioChunk>();
+      const totalAudioFrames = outputAudioFrameCount(durationUs);
+      const totalAudioChunks = Math.ceil(
+        totalAudioFrames / AUDIO_ENCODER_CHUNK_FRAMES,
+      );
+      for (const clip of [...audibleAudioClips(project)].sort(
         (left, right) => left.timelineStartUs - right.timelineStartUs,
       )) {
         signal.throwIfAborted();
+        if (codecError) {
+          throw codecError;
+        }
         const runtime = runtimes.get(clip.assetId);
         if (!runtime?.audio) {
           continue;
@@ -854,31 +977,63 @@ export async function exportProjectToMp4(
               clip.sourceStartUs,
               Math.round(sample.timestamp * 1_000_000),
             );
-            const audioData = audioDataFromSample(sample, timestampUs);
-            const audioDataLease = lifecycle.trackClosable(
-              "audio-data",
-              audioData,
+            const mixInput = planarAudioFromSample(sample);
+            mixPlanarAudioIntoChunks(
+              mixedChunks,
+              {
+                ...mixInput,
+                timelineStartUs: timestampUs,
+              },
+              durationUs,
             );
-            try {
-              if (audioEncoder.encodeQueueSize >= CODEC_QUEUE_HIGH_WATERMARK) {
-                queue.backpressureWaits += 1;
-                queue.audioBackpressureWaits += 1;
-              }
-              await waitForQueue(audioEncoder, signal);
-              audioEncoder.encode(audioData);
-              audioFrames += audioData.numberOfFrames;
-              queue.audioPeak = Math.max(
-                queue.audioPeak,
-                audioEncoder.encodeQueueSize,
-              );
-            } finally {
-              audioDataLease.release();
-            }
           } finally {
             sample.close();
           }
         }
         report("audio");
+      }
+      for (let chunkIndex = 0; chunkIndex < totalAudioChunks; chunkIndex += 1) {
+        signal.throwIfAborted();
+        if (codecError) {
+          throw codecError;
+        }
+        const mixedChunk =
+          mixedChunks.get(chunkIndex) ??
+          createMixedAudioChunk(chunkIndex, totalAudioFrames);
+        if (mixedChunk.frames <= 0) {
+          continue;
+        }
+        const audioData = audioDataFromMixedChunk(mixedChunk);
+        const audioDataLease = lifecycle.trackClosable("audio-data", audioData);
+        try {
+          if (audioEncoder.encodeQueueSize >= CODEC_QUEUE_HIGH_WATERMARK) {
+            queue.backpressureWaits += 1;
+            queue.audioBackpressureWaits += 1;
+          }
+          await waitForQueue(audioEncoder, signal);
+          if (audioEncoder.encodeQueueSize >= CODEC_QUEUE_HIGH_WATERMARK - 1) {
+            logger?.log({
+              event: "backpressure",
+              input: { source: "original" },
+              level: "debug",
+              marker: "[EXPORT]",
+              output: { audioQueue: audioEncoder.encodeQueueSize },
+              projectRevision: project.revision,
+              requestId,
+            });
+          }
+          audioEncoder.encode(audioData);
+          audioFrames += audioData.numberOfFrames;
+          queue.audioPeak = Math.max(
+            queue.audioPeak,
+            audioEncoder.encodeQueueSize,
+          );
+        } finally {
+          audioDataLease.release();
+        }
+        if (chunkIndex % 16 === 0 || chunkIndex === totalAudioChunks - 1) {
+          report("audio");
+        }
       }
       await audioEncoder.flush();
       await audioMux;

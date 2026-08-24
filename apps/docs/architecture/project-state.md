@@ -24,6 +24,24 @@ flowchart LR
 `after`，因此数十次 pointer move 只产生一个 Undo 步骤。Undo/Redo 恢复历史快照，
 不是执行猜测性的反命令。
 
+## 多音视频轨道
+
+`ProjectDocument.tracks` 可以保存多个 `kind: "video"` 和 `kind: "audio"` 轨道。主编辑器
+分别维护当前目标视频轨道和当前目标音频轨道；点击“新增视频轨”或“新增音频轨”通过
+`track.video.add` / `track.audio.add` 写入正式 Command，然后把后续“添加到时间线”生成的
+Clip 放到对应目标轨道。时间线按 `track.order` 渲染 V1、A1、T1、V2/A2...，同一个素材可以
+重复添加为多个视频或音频 Clip。
+
+非重叠约束只在同一个媒体轨道内部生效。不同视频轨道或不同音频轨道上的 Clip 可以在同一工程
+时间重叠，这是叠加画面与混合声音的正常编辑方式。拖动、裁剪、append 位置也只参考当前 Clip
+所在轨道的相邻片段；播放头、播放/暂停、逐帧、分割、删除、Undo/Redo 和 Inspector 时间属性
+仍是全局编辑控制。
+
+添加素材默认使用当前播放头作为 `timelineStartUs`；“追加视频到目标轨尾”和“追加音频到目标轨尾”
+只计算当前目标轨道的末尾，不会因为其他轨道上存在重叠片段而强制串联。旧工程中的默认
+`video-track`、`audio-track`、`text-track` 保持有效，分别作为 V1、A1、T1；没有新增轨道的
+工程在行为上仍等价于旧单轨工程。
+
 ## 不进入 Redux 的对象
 
 `File`、`Blob`、ArrayBuffer/TypedArray、VideoFrame、AudioData、codec、Worker、

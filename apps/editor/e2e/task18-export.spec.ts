@@ -30,21 +30,45 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto("/");
+  await page.getByTestId("structured-log-toggle").click();
+  await expect(page.getByTestId("structured-log-toggle")).toHaveText(
+    "日志开启",
+  );
   const item = await importTestOne(page);
 
   await item.getByRole("button", { name: /添加到时间线/ }).click();
   await fill(page, "源入点（秒）", "0.5");
-  await fill(page, "源出点（秒）", "1.5");
+  await fill(page, "源出点（秒）", "2.5");
 
+  await item.getByRole("button", { name: "添加音频到时间线" }).click();
+  await fill(page, "时间线起点（秒）", "0.25");
+  await fill(page, "源入点（秒）", "0.5");
+  await fill(page, "源出点（秒）", "2.5");
+
+  await page.getByRole("button", { name: "新增视频轨" }).click();
+  await expect(page.getByRole("button", { name: "V2 视频 2" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await item.getByRole("button", { name: /添加到时间线/ }).click();
   await fill(page, "源入点（秒）", "12");
-  await fill(page, "源出点（秒）", "13");
+  await fill(page, "源出点（秒）", "14");
   await fill(page, "片段位置 X", "0.68");
   await fill(page, "片段位置 Y", "0.62");
   await fill(page, "片段缩放", "0.58");
   await fill(page, "片段旋转", "18");
   await page.getByLabel("滤镜类型").selectOption("grayscale");
   await fill(page, "滤镜强度", "1");
+
+  await page.getByRole("button", { name: "新增音频轨" }).click();
+  await expect(page.getByRole("button", { name: "A2 音频 2" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await item.getByRole("button", { name: "添加音频到时间线" }).click();
+  await fill(page, "时间线起点（秒）", "0.6");
+  await fill(page, "源入点（秒）", "12");
+  await fill(page, "源出点（秒）", "14");
 
   await page.getByRole("button", { name: "添加标题" }).click();
   await fill(page, "标题文本", "TASK 18");
@@ -61,6 +85,7 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
       sourceEndUs: number;
       sourceStartUs: number;
       timelineStartUs: number;
+      trackId: string;
       transform?: {
         rotationDeg: number;
         scale: number;
@@ -69,24 +94,52 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
       };
     }>;
     texts: Array<{ color: string; endUs: number; text: string }>;
+    tracks: Array<{ id: string; kind: string; order: number }>;
   };
-  expect(project.clips).toHaveLength(2);
-  expect(project.clips[0]).toMatchObject({
-    sourceEndUs: 1_500_000,
+  expect(project.clips).toHaveLength(4);
+  expect(
+    project.tracks
+      .filter((track) => track.kind === "video")
+      .map((track) => track.id),
+  ).toEqual(["video-track", "video-track-2"]);
+  expect(
+    project.tracks
+      .filter((track) => track.kind === "audio")
+      .map((track) => track.id),
+  ).toEqual(["audio-track", "audio-track-2"]);
+  const clipByTrack = new Map(
+    project.clips.map((clip) => [clip.trackId, clip]),
+  );
+  expect(clipByTrack.get("video-track")).toMatchObject({
+    sourceEndUs: 2_500_000,
     sourceStartUs: 500_000,
     timelineStartUs: 0,
+    trackId: "video-track",
   });
-  expect(project.clips[1]).toMatchObject({
+  expect(clipByTrack.get("video-track-2")).toMatchObject({
     effects: [{ amount: 1, kind: "grayscale" }],
-    sourceEndUs: 13_000_000,
+    sourceEndUs: 14_000_000,
     sourceStartUs: 12_000_000,
-    timelineStartUs: 1_000_000,
+    timelineStartUs: 0,
+    trackId: "video-track-2",
     transform: {
       rotationDeg: 18,
       scale: 0.58,
       x: 0.68,
       y: 0.62,
     },
+  });
+  expect(clipByTrack.get("audio-track")).toMatchObject({
+    sourceEndUs: 2_500_000,
+    sourceStartUs: 500_000,
+    timelineStartUs: 250_000,
+    trackId: "audio-track",
+  });
+  expect(clipByTrack.get("audio-track-2")).toMatchObject({
+    sourceEndUs: 14_000_000,
+    sourceStartUs: 12_000_000,
+    timelineStartUs: 600_000,
+    trackId: "audio-track-2",
   });
   expect(project.texts[0]).toMatchObject({
     color: "#ff2d55",
@@ -155,27 +208,24 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
       context.drawImage(video, 0, 0, width, height);
       return read(canvas);
     };
-    const expected = async (
+    type TransformSpec = {
+      grayscale: boolean;
+      rotationDeg: number;
+      scale: number;
+      x: number;
+      y: number;
+    };
+    type LayerSpec = {
+      sourceTime: number;
+      transform: TransformSpec;
+    };
+    const drawLayer = async (
+      context: CanvasRenderingContext2D,
       video: HTMLVideoElement,
-      sourceTime: number,
-      transform: {
-        grayscale: boolean;
-        rotationDeg: number;
-        scale: number;
-        x: number;
-        y: number;
-      },
+      layer: LayerSpec,
     ) => {
-      await seek(video, sourceTime);
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        throw new Error("Expected frame context unavailable");
-      }
-      context.fillStyle = "#000000";
-      context.fillRect(0, 0, width, height);
+      await seek(video, layer.sourceTime);
+      const transform = layer.transform;
       context.save();
       context.filter = transform.grayscale ? "grayscale(1)" : "none";
       context.translate(transform.x * width, transform.y * height);
@@ -195,6 +245,25 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
         drawHeight,
       );
       context.restore();
+      context.filter = "none";
+      context.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const expected = async (
+      video: HTMLVideoElement,
+      layers: readonly LayerSpec[],
+    ) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Expected frame context unavailable");
+      }
+      context.fillStyle = "#000000";
+      context.fillRect(0, 0, width, height);
+      for (const layer of layers) {
+        await drawLayer(context, video, layer);
+      }
       return read(canvas);
     };
     const difference = (left: number[], right: number[], minimumY = 0) => {
@@ -212,10 +281,60 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
       }
       return total / count;
     };
-    const chroma = (pixels: number[]) => {
+    const brightness = (pixels: number[], offset: number) =>
+      (pixels[offset] ?? 0) +
+      (pixels[offset + 1] ?? 0) +
+      (pixels[offset + 2] ?? 0);
+    const maskedDifference = (
+      left: number[],
+      right: number[],
+      include: number[],
+      exclude?: number[],
+    ) => {
+      let total = 0;
+      let count = 0;
+      for (let offset = 0; offset < left.length; offset += 4) {
+        if (
+          brightness(include, offset) <= 30 ||
+          (exclude && brightness(exclude, offset) > 30)
+        ) {
+          continue;
+        }
+        total +=
+          Math.abs((left[offset] ?? 0) - (right[offset] ?? 0)) +
+          Math.abs((left[offset + 1] ?? 0) - (right[offset + 1] ?? 0)) +
+          Math.abs((left[offset + 2] ?? 0) - (right[offset + 2] ?? 0));
+        count += 3;
+      }
+      return count === 0 ? 255 : total / count;
+    };
+    const maskPixelCount = (include: number[], exclude?: number[]) => {
+      let count = 0;
+      for (let offset = 0; offset < include.length; offset += 4) {
+        if (
+          brightness(include, offset) > 30 &&
+          (!exclude || brightness(exclude, offset) <= 30)
+        ) {
+          count += 1;
+        }
+      }
+      return count;
+    };
+    const chroma = (
+      pixels: number[],
+      include?: number[],
+      exclude?: number[],
+    ) => {
       let total = 0;
       let count = 0;
       for (let offset = 0; offset < pixels.length; offset += 4) {
+        if (
+          include &&
+          (brightness(include, offset) <= 30 ||
+            (exclude && brightness(exclude, offset) > 30))
+        ) {
+          continue;
+        }
         const channels = [
           pixels[offset] ?? 0,
           pixels[offset + 1] ?? 0,
@@ -265,28 +384,94 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
       x: 0.68,
       y: 0.62,
     };
-    const beforeCorrect = await expected(original, 1.3, defaultTransform);
-    const beforeWrong = await expected(original, 12.1, defaultTransform);
-    const afterCorrect = await expected(original, 12.1, transformed);
-    const afterWrong = await expected(original, 1.3, transformed);
-    const afterNoTransform = await expected(original, 12.1, {
-      ...defaultTransform,
-      grayscale: true,
-    });
-    const afterNoRotation = await expected(original, 12.1, {
-      ...transformed,
-      rotationDeg: 0,
-    });
+    const beforeBase = {
+      sourceTime: 1.3,
+      transform: defaultTransform,
+    };
+    const beforeOverlay = {
+      sourceTime: 12.8,
+      transform: transformed,
+    };
+    const afterBase = {
+      sourceTime: 1.6,
+      transform: defaultTransform,
+    };
+    const afterOverlay = {
+      sourceTime: 13.1,
+      transform: transformed,
+    };
+    const beforeBaseLayer = await expected(original, [beforeBase]);
+    const beforeOverlayLayer = await expected(original, [beforeOverlay]);
+    const beforeCombined = await expected(original, [
+      beforeBase,
+      beforeOverlay,
+    ]);
+    const afterBaseLayer = await expected(original, [afterBase]);
+    const afterOverlayLayer = await expected(original, [afterOverlay]);
+    const afterCombined = await expected(original, [afterBase, afterOverlay]);
+    const afterNoTransform = await expected(original, [
+      afterBase,
+      {
+        sourceTime: 13.1,
+        transform: {
+          ...defaultTransform,
+          grayscale: true,
+        },
+      },
+    ]);
+    const afterNoRotation = await expected(original, [
+      afterBase,
+      {
+        sourceTime: 13.1,
+        transform: {
+          ...transformed,
+          rotationDeg: 0,
+        },
+      },
+    ]);
     const pixels = {
-      afterChroma: chroma(after),
-      afterCorrectDiff: difference(after, afterCorrect),
+      afterBaseOnlyDiff: difference(after, afterBaseLayer),
+      afterCombinedDiff: difference(after, afterCombined),
       afterNoRotationDiff: difference(after, afterNoRotation),
       afterNoTransformDiff: difference(after, afterNoTransform),
-      afterWrongSourceDiff: difference(after, afterWrong),
-      beforeChroma: chroma(before),
-      beforeCorrectDiff: difference(before, beforeCorrect, 120),
-      beforeWrongSourceDiff: difference(before, beforeWrong, 120),
+      afterOverlayOnlyDiff: difference(after, afterOverlayLayer),
+      baseOutsideOverlayChroma: chroma(
+        after,
+        afterBaseLayer,
+        afterOverlayLayer,
+      ),
+      baseOutsideOverlayDiff: maskedDifference(
+        after,
+        afterBaseLayer,
+        afterBaseLayer,
+        afterOverlayLayer,
+      ),
+      baseOutsideOverlayPixelCount: maskPixelCount(
+        afterBaseLayer,
+        afterOverlayLayer,
+      ),
+      baseOutsideOverlayWrongDiff: maskedDifference(
+        after,
+        afterOverlayLayer,
+        afterBaseLayer,
+        afterOverlayLayer,
+      ),
+      beforeBaseOnlyDiff: difference(before, beforeBaseLayer, 120),
+      beforeCombinedDiff: difference(before, beforeCombined, 120),
+      beforeOverlayOnlyDiff: difference(before, beforeOverlayLayer, 120),
       boundaryDiff: difference(before, after),
+      overlayPixelCount: maskPixelCount(afterOverlayLayer),
+      overlayRegionBaseDiff: maskedDifference(
+        after,
+        afterBaseLayer,
+        afterOverlayLayer,
+      ),
+      overlayRegionChroma: chroma(after, afterOverlayLayer),
+      overlayRegionDiff: maskedDifference(
+        after,
+        afterOverlayLayer,
+        afterOverlayLayer,
+      ),
       redTitlePixels: redTitlePixels(before),
     };
     URL.revokeObjectURL(exportedUrl);
@@ -316,8 +501,8 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
 
   expect(mediaEvidence.result).toMatchObject({
     audioCodec: "mp4a.40.2",
-    durationUs: 2_000_000,
-    frames: 60,
+    durationUs: 2_600_000,
+    frames: 78,
     height: 1080,
     source: "original",
     width: 1920,
@@ -327,7 +512,7 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
     width: 1920,
   });
   expect(mediaEvidence.decoded.duration).toBeGreaterThan(1.9);
-  expect(mediaEvidence.decoded.duration).toBeLessThan(2.15);
+  expect(mediaEvidence.decoded.duration).toBeLessThan(2.85);
   expect(mediaEvidence.decoded.readyState).toBeGreaterThanOrEqual(1);
 
   const probe = mediaEvidence.inspection.probe;
@@ -339,8 +524,8 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   );
   expect(probe.container.mimeType).toMatch(/^video\/mp4(?:;|$)/);
   expect(probe.source.kind).toBe("blob");
-  expect(probe.durationSec).toBeGreaterThan(1.9);
-  expect(probe.durationSec).toBeLessThan(2.15);
+  expect(probe.durationSec).toBeGreaterThan(2.55);
+  expect(probe.durationSec).toBeLessThan(2.85);
   expect(videoTrack).toMatchObject({
     codec: "avc",
     decodable: true,
@@ -356,32 +541,47 @@ test("Task 18 exports and reimports ordered transformed clips with title, filter
   expect(mediaEvidence.inspection.audio).toMatchObject({
     timestampsMonotonic: true,
   });
-  expect(mediaEvidence.inspection.audio?.packetCount).toBeGreaterThan(80);
+  expect(mediaEvidence.result.audioFrames).toBeGreaterThanOrEqual(124_000);
+  expect(mediaEvidence.result.audioFrames).toBeLessThan(126_000);
+  expect(mediaEvidence.inspection.audio?.packetCount).toBeGreaterThan(100);
   expect(
     mediaEvidence.inspection.audio?.firstTimestampUs,
   ).toBeGreaterThanOrEqual(0);
   expect(mediaEvidence.inspection.audio?.firstTimestampUs).toBeLessThan(30_000);
   expect(
     mediaEvidence.inspection.audio?.lastEndTimestampUs,
-  ).toBeGreaterThanOrEqual(1_950_000);
+  ).toBeGreaterThanOrEqual(2_550_000);
 
   const pixels = mediaEvidence.pixels;
   console.info(`[TASK18_PIXEL_METRICS] ${JSON.stringify(pixels)}`);
   expect(pixels.boundaryDiff).toBeGreaterThan(5);
-  expect(pixels.beforeCorrectDiff).toBeLessThan(
-    pixels.beforeWrongSourceDiff * 0.8,
+  expect(pixels.beforeCombinedDiff).toBeLessThan(
+    pixels.beforeBaseOnlyDiff * 0.9,
   );
-  expect(pixels.afterCorrectDiff).toBeLessThan(
-    pixels.afterWrongSourceDiff * 0.8,
+  expect(pixels.beforeCombinedDiff).toBeLessThan(
+    pixels.beforeOverlayOnlyDiff * 0.9,
   );
-  expect(pixels.afterCorrectDiff).toBeLessThan(
+  expect(pixels.afterCombinedDiff).toBeLessThan(pixels.afterBaseOnlyDiff * 0.9);
+  expect(pixels.afterCombinedDiff).toBeLessThan(
+    pixels.afterOverlayOnlyDiff * 0.9,
+  );
+  expect(pixels.afterCombinedDiff).toBeLessThan(
     pixels.afterNoTransformDiff * 0.8,
   );
-  expect(pixels.afterCorrectDiff).toBeLessThan(
+  expect(pixels.afterCombinedDiff).toBeLessThan(
     pixels.afterNoRotationDiff * 0.9,
   );
-  expect(pixels.afterChroma).toBeLessThan(4);
-  expect(pixels.beforeChroma).toBeGreaterThan(pixels.afterChroma + 3);
+  expect(pixels.overlayPixelCount).toBeGreaterThan(2_000);
+  expect(pixels.baseOutsideOverlayPixelCount).toBeGreaterThan(5_000);
+  expect(pixels.overlayRegionDiff).toBeLessThan(
+    pixels.overlayRegionBaseDiff * 0.75,
+  );
+  expect(pixels.baseOutsideOverlayDiff).toBeLessThan(
+    pixels.baseOutsideOverlayWrongDiff * 0.75,
+  );
+  expect(pixels.overlayRegionChroma).toBeLessThan(
+    pixels.baseOutsideOverlayChroma,
+  );
   expect(pixels.redTitlePixels).toBeGreaterThan(100);
 
   expect(mediaEvidence.logs).toHaveLength(2);

@@ -127,6 +127,12 @@ export function previewSourceMetadata(source: PreviewSource): {
 
 export type RuntimeEvaluation = {
   activeEntities: readonly RuntimeEntity[];
+  activeVideos: readonly {
+    assetId: string;
+    entityId: string;
+    order: number;
+    sourceTimeUs: number;
+  }[];
   created: number;
   playheadUs: number;
   released: number;
@@ -141,6 +147,7 @@ export type RuntimeEvaluation = {
 
 export type PreviewMetrics = {
   activeResources: number;
+  activeVideoLayers: number;
   audioActiveSources: number;
   audioGeneration: number;
   avDriftUs: number;

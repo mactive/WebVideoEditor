@@ -1,4 +1,11 @@
-import type { Asset, Clip, Effect, ProjectDocument, TextItem } from "./schema";
+import type {
+  Asset,
+  Clip,
+  Effect,
+  ProjectDocument,
+  TextItem,
+  Track,
+} from "./schema";
 import { cloneProjectDocument } from "./serialization";
 import { ProjectValidationError, validateProjectDocument } from "./validation";
 
@@ -6,6 +13,16 @@ export type AddAssetCommand = {
   type: "asset.add";
   asset: Asset;
   adaptCanvasToAsset?: boolean;
+};
+
+export type AddVideoTrackCommand = {
+  type: "track.video.add";
+  trackId?: string;
+};
+
+export type AddAudioTrackCommand = {
+  type: "track.audio.add";
+  trackId?: string;
 };
 
 export type AddClipCommand = {
@@ -83,6 +100,8 @@ export type SetEffectCommand = {
 
 export type ProjectCommand =
   | AddAssetCommand
+  | AddAudioTrackCommand
+  | AddVideoTrackCommand
   | AddClipCommand
   | AddTextCommand
   | DeleteClipCommand
@@ -106,6 +125,38 @@ function requiredIndex(
   return index;
 }
 
+function nextTrackOrder(tracks: ReadonlyArray<Track>): number {
+  return Math.max(-1, ...tracks.map((track) => track.order)) + 1;
+}
+
+function createMediaTrack(
+  project: ProjectDocument,
+  kind: "audio" | "video",
+  trackId?: string,
+): Track {
+  const trackIndex =
+    project.tracks.filter((track) => track.kind === kind).length + 1;
+  const label = kind === "video" ? "视频" : "音频";
+  let id =
+    trackId ??
+    (trackIndex === 1 ? `${kind}-track` : `${kind}-track-${trackIndex}`);
+  let suffix = trackIndex;
+
+  while (!trackId && project.tracks.some((track) => track.id === id)) {
+    suffix += 1;
+    id = `${kind}-track-${suffix}`;
+  }
+
+  return {
+    id,
+    kind,
+    name: trackIndex === 1 ? label : `${label} ${trackIndex}`,
+    order: nextTrackOrder(project.tracks),
+    muted: false,
+    locked: false,
+  };
+}
+
 function applyUnchecked(
   project: ProjectDocument,
   command: ProjectCommand,
@@ -120,6 +171,23 @@ function applyUnchecked(
         project.canvas.height = command.asset.height;
       }
       project.assets.push(command.asset);
+      break;
+    }
+    case "track.audio.add":
+    case "track.video.add": {
+      if (
+        command.trackId &&
+        project.tracks.some((track) => track.id === command.trackId)
+      ) {
+        throw new Error(`轨道 "${command.trackId}" 已存在`);
+      }
+      project.tracks.push(
+        createMediaTrack(
+          project,
+          command.type === "track.video.add" ? "video" : "audio",
+          command.trackId,
+        ),
+      );
       break;
     }
     case "clip.add": {

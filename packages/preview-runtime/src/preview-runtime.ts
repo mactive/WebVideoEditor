@@ -4,6 +4,7 @@ import {
   createMediabunnyDecoderQueueObservation,
   createSeekStream,
   selectVideoFrameByTimestamp,
+  type AudioPlaybackRequest,
   type MediabunnyAudioPlayback,
   type PlaybackMediaSource,
   type ResourceLifecycleSnapshot,
@@ -22,13 +23,23 @@ import type {
 } from "./types";
 
 type DecodeJob = {
+  entityId: string;
+  source: PreviewSource;
+  sourceTimeUs: number;
+};
+
+type DecodeBatch = {
   generation: number;
+  layers: readonly DecodeJob[];
   origin: "playback" | "seek";
   playheadUs: number;
   projectRevision: number;
   requestId: string;
-  source: PreviewSource;
-  sourceTimeUs: number;
+};
+
+type DecodedLayerFrame = {
+  decoded: DecodedPreviewFrame;
+  job: DecodeJob;
 };
 
 const PLAYBACK_STARTUP_MAX_VIDEO_LAG_US = 500_000;
@@ -59,10 +70,28 @@ function projectDurationUs(project: ProjectDocument): number {
   return Math.max(clipEnd, textEnd);
 }
 
+function audioClipsForPlayback(
+  project: ProjectDocument,
+): AudioPlaybackRequest["clips"] {
+  const trackById = new Map(project.tracks.map((track) => [track.id, track]));
+  return project.clips
+    .filter((clip) => {
+      const track = trackById.get(clip.trackId);
+      return track?.kind === "audio" && !track.muted;
+    })
+    .map((clip) => ({
+      assetId: clip.assetId,
+      id: clip.id,
+      sourceEndUs: clip.sourceEndUs,
+      sourceStartUs: clip.sourceStartUs,
+      timelineStartUs: clip.timelineStartUs,
+    }));
+}
+
 export class PreviewRuntime {
   private readonly adapter: ProjectRuntimeAdapter;
   private readonly clock: MonotonicProjectClock;
-  private readonly jobs = new Subject<DecodeJob>();
+  private readonly jobs = new Subject<DecodeBatch>();
   private readonly listeners = new Set<() => void>();
   private readonly sources = new Map<string, PreviewSource>();
   private readonly frameTimes: number[] = [];
@@ -92,6 +121,7 @@ export class PreviewRuntime {
       durationUs: projectDurationUs(this.project),
       metrics: {
         activeResources: options.decoder.activeResources(),
+        activeVideoLayers: 0,
         audioActiveSources: 0,
         audioGeneration: 0,
         avDriftUs: 0,
@@ -309,7 +339,7 @@ export class PreviewRuntime {
     }
     void this.options.audio
       .start({
-        clips: this.project.clips,
+        clips: audioClipsForPlayback(this.project),
         projectDurationUs: this.snapshot.durationUs,
         projectRevision: this.project.revision,
         startTimeUs: playheadUs,
@@ -384,7 +414,7 @@ export class PreviewRuntime {
 
   private requestFrame(
     playheadUs: number,
-    origin: DecodeJob["origin"] = "seek",
+    origin: DecodeBatch["origin"] = "seek",
   ): void {
     if (this.disposed) {
       return;
@@ -407,32 +437,40 @@ export class PreviewRuntime {
       error: undefined,
       metrics: {
         ...this.snapshot.metrics,
+        activeVideoLayers: evaluation.activeVideos.length,
         playheadUs: clamped,
       },
     };
     this.refreshDecoderMetrics();
     this.notify();
 
-    if (!evaluation.video) {
+    if (evaluation.activeVideos.length === 0) {
       return;
     }
-    const source = this.sources.get(evaluation.video.assetId);
-    if (!source) {
-      this.setError(
-        new Error(
-          `No proxy source is registered for asset "${evaluation.video.assetId}"`,
-        ),
-      );
-      return;
+    const layers: DecodeJob[] = [];
+    for (const video of evaluation.activeVideos) {
+      const source = this.sources.get(video.assetId);
+      if (!source) {
+        this.setError(
+          new Error(
+            `No proxy source is registered for asset "${video.assetId}" (${video.entityId})`,
+          ),
+        );
+        return;
+      }
+      layers.push({
+        entityId: video.entityId,
+        source,
+        sourceTimeUs: video.sourceTimeUs,
+      });
     }
     this.jobs.next({
       generation: this.clock.snapshot().generation,
+      layers,
       origin,
       playheadUs: clamped,
       projectRevision: this.project.revision,
       requestId,
-      source,
-      sourceTimeUs: evaluation.video.sourceTimeUs,
     });
   }
 
@@ -476,16 +514,7 @@ export class PreviewRuntime {
 
   private connectSeekStream(): void {
     this.seekSubscription = createSeekStream(this.jobs, (job, signal) =>
-      this.options.decoder
-        .decode(
-          job.source,
-          job.sourceTimeUs,
-          job.projectRevision,
-          job.requestId,
-          job.generation,
-          signal,
-        )
-        .then((decoded) => ({ decoded, job })),
+      this.decodeBatch(job, signal).then((decoded) => ({ decoded, job })),
     ).subscribe({
       error: (error: unknown) => {
         this.playbackDecodeInFlight = false;
@@ -505,79 +534,124 @@ export class PreviewRuntime {
     });
   }
 
-  private present(decoded: DecodedPreviewFrame, job: DecodeJob): void {
+  private async decodeBatch(
+    batch: DecodeBatch,
+    signal: AbortSignal,
+  ): Promise<readonly DecodedLayerFrame[]> {
+    const layerPromises = batch.layers.map(async (job) => {
+      const decoded = await this.options.decoder.decode(
+        job.source,
+        job.sourceTimeUs,
+        batch.projectRevision,
+        batch.requestId,
+        job.entityId,
+        batch.generation,
+        signal,
+      );
+      return { decoded, job };
+    });
+    try {
+      return await Promise.all(layerPromises);
+    } catch (error) {
+      const settledFrames = await Promise.allSettled(layerPromises);
+      for (const frame of settledFrames) {
+        if (frame.status === "fulfilled") {
+          frame.value.decoded.release();
+        }
+      }
+      throw error;
+    }
+  }
+
+  private present(
+    decodedFrames: readonly DecodedLayerFrame[],
+    batch: DecodeBatch,
+  ): void {
     let resyncTimeUs: number | undefined;
+    let presentedLayers = 0;
     try {
       if (
-        job.requestId !== this.latestRequestId ||
-        job.projectRevision !== this.project.revision
+        batch.requestId !== this.latestRequestId ||
+        batch.projectRevision !== this.project.revision
       ) {
         return;
       }
       const clock = this.clock.snapshot();
       const masterTimeUs = this.snapshot.playing
         ? Math.min(clock.timeUs, this.snapshot.durationUs)
-        : job.playheadUs;
-      const timing = selectVideoFrameByTimestamp({
-        currentGeneration: clock.generation,
-        currentRevision: this.project.revision,
-        frameGeneration: decoded.generation,
-        frameRevision: job.projectRevision,
-        frameSourceTimeUs: decoded.sourceTimeUs,
-        masterTimeUs,
-        maxVideoLagUs:
-          job.origin === "playback" && this.snapshot.metrics.fps < 5
-            ? PLAYBACK_STARTUP_MAX_VIDEO_LAG_US
-            : undefined,
-        requestedProjectTimeUs: job.playheadUs,
-        requestedSourceTimeUs: job.sourceTimeUs,
-      });
-      this.snapshot = {
-        ...this.snapshot,
-        metrics: {
-          ...this.snapshot.metrics,
-          avDriftUs: timing.avDriftUs,
-          frameTimestampErrorUs: timing.frameTimestampErrorUs,
-        },
-      };
-      if (timing.drop) {
-        this.syncDroppedFrames += 1;
+        : batch.playheadUs;
+      for (const { decoded, job } of decodedFrames) {
+        if (decoded.entityId !== job.entityId) {
+          this.syncDroppedFrames += 1;
+          continue;
+        }
+        const timing = selectVideoFrameByTimestamp({
+          currentGeneration: clock.generation,
+          currentRevision: this.project.revision,
+          frameGeneration: decoded.generation,
+          frameRevision: batch.projectRevision,
+          frameSourceTimeUs: decoded.sourceTimeUs,
+          masterTimeUs,
+          maxVideoLagUs:
+            batch.origin === "playback" && this.snapshot.metrics.fps < 5
+              ? PLAYBACK_STARTUP_MAX_VIDEO_LAG_US
+              : undefined,
+          requestedProjectTimeUs: batch.playheadUs,
+          requestedSourceTimeUs: job.sourceTimeUs,
+        });
         this.snapshot = {
           ...this.snapshot,
           metrics: {
             ...this.snapshot.metrics,
-            resyncs: this.snapshot.metrics.resyncs + (timing.resync ? 1 : 0),
-            timestampDrops: this.snapshot.metrics.timestampDrops + 1,
-          },
-        };
-        this.options.logger?.log({
-          event: "frame.dropped",
-          input: {
-            frameSourceTimeUs: decoded.sourceTimeUs,
-            masterTimeUs,
-            requestedSourceTimeUs: job.sourceTimeUs,
-          },
-          level: timing.resync ? "warn" : "debug",
-          marker: "[RENDER]",
-          output: {
             avDriftUs: timing.avDriftUs,
             frameTimestampErrorUs: timing.frameTimestampErrorUs,
-            reason: timing.reason,
-            resync: timing.resync,
           },
-          projectRevision: job.projectRevision,
-          requestId: job.requestId,
-        });
-        if (timing.resync) {
-          resyncTimeUs = masterTimeUs;
+        };
+        if (timing.drop) {
+          this.syncDroppedFrames += 1;
+          this.snapshot = {
+            ...this.snapshot,
+            metrics: {
+              ...this.snapshot.metrics,
+              resyncs: this.snapshot.metrics.resyncs + (timing.resync ? 1 : 0),
+              timestampDrops: this.snapshot.metrics.timestampDrops + 1,
+            },
+          };
+          this.options.logger?.log({
+            event: "frame.dropped",
+            input: {
+              entityId: job.entityId,
+              frameSourceTimeUs: decoded.sourceTimeUs,
+              masterTimeUs,
+              requestedSourceTimeUs: job.sourceTimeUs,
+            },
+            level: timing.resync ? "warn" : "debug",
+            marker: "[RENDER]",
+            output: {
+              avDriftUs: timing.avDriftUs,
+              frameTimestampErrorUs: timing.frameTimestampErrorUs,
+              reason: timing.reason,
+              resync: timing.resync,
+            },
+            projectRevision: batch.projectRevision,
+            requestId: batch.requestId,
+          });
+          if (timing.resync) {
+            resyncTimeUs = masterTimeUs;
+          }
+          continue;
         }
+        this.options.renderer.present(decoded.frame, {
+          entityId: job.entityId,
+          playheadUs: batch.playheadUs,
+          projectRevision: batch.projectRevision,
+          requestId: batch.requestId,
+        });
+        presentedLayers += 1;
+      }
+      if (presentedLayers === 0) {
         return;
       }
-      this.options.renderer.present(decoded.frame, {
-        playheadUs: job.playheadUs,
-        projectRevision: job.projectRevision,
-        requestId: job.requestId,
-      });
       const now = performance.now();
       this.frameTimes.push(now);
       while (
@@ -592,15 +666,17 @@ export class PreviewRuntime {
         metrics: {
           ...this.snapshot.metrics,
           fps: this.frameTimes.length,
-          presentedPlayheadUs: job.playheadUs,
+          presentedPlayheadUs: batch.playheadUs,
           presentedFrames: this.snapshot.metrics.presentedFrames + 1,
         },
       };
     } finally {
-      decoded.release();
+      for (const { decoded } of decodedFrames) {
+        decoded.release();
+      }
       this.refreshDecoderMetrics();
       this.notify();
-      if (job.origin === "playback") {
+      if (batch.origin === "playback") {
         this.playbackDecodeInFlight = false;
         if (this.snapshot.playing && !this.disposed) {
           const latestClockUs = Math.min(

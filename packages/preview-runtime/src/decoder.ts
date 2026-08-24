@@ -19,6 +19,7 @@ export const PREVIEW_DECODE_PROTOCOL_VERSION = 1 as const;
 export type PreviewDecodeRequest = {
   cacheKey: string;
   diagnosticLogs: boolean;
+  entityId: string;
   generation: number;
   keyframes: PreviewSource["keyframes"];
   frameRate: number;
@@ -32,6 +33,7 @@ export type PreviewDecodeRequest = {
 };
 
 export type PreviewDecodeCancel = {
+  entityId: string;
   operation: "cancel";
   reason?: string;
   requestId: string;
@@ -43,6 +45,7 @@ export type PreviewDecodeResponse =
   | {
       decodeQueue: number;
       decoderQueue: CodecQueueObservation;
+      entityId: string;
       requestId: string;
       type: "preview.queue";
       version: typeof PREVIEW_DECODE_PROTOCOL_VERSION;
@@ -51,6 +54,7 @@ export type PreviewDecodeResponse =
       decodeFromUs: number;
       decodeQueue: number;
       decoderQueue: CodecQueueObservation;
+      entityId: string;
       frame: VideoFrame;
       generation: number;
       projectRevision: number;
@@ -63,6 +67,7 @@ export type PreviewDecodeResponse =
   | {
       decodeQueue: number;
       decoderQueue: CodecQueueObservation;
+      entityId: string;
       reason: "cancelled" | "superseded";
       requestId: string;
       type: "preview.dropped";
@@ -71,6 +76,7 @@ export type PreviewDecodeResponse =
   | {
       decodeQueue: number;
       decoderQueue: CodecQueueObservation;
+      entityId: string;
       error: string;
       projectRevision: number;
       requestId: string;
@@ -93,6 +99,7 @@ type WorkerTransport = {
 
 export type DecodedPreviewFrame = {
   decodeFromUs: number;
+  entityId: string;
   frame: VideoFrame;
   generation: number;
   release(): void;
@@ -110,15 +117,21 @@ export type PreviewDecoderStats = {
 
 type PendingDecode = {
   abort?: () => void;
+  entityId: string;
   generation: number;
   projectRevision: number;
   reject(reason: unknown): void;
+  requestId: string;
   resolve(value: DecodedPreviewFrame): void;
   signal?: AbortSignal;
 };
 
 function abortError(reason: string): DOMException {
   return new DOMException(reason, "AbortError");
+}
+
+function decodeKey(requestId: string, entityId: string): string {
+  return `${requestId}::${entityId}`;
 }
 
 export class PreviewDecoderClient {
@@ -159,7 +172,10 @@ export class PreviewDecoderClient {
     }
     const requestId =
       typeof message.requestId === "string" ? message.requestId : "";
-    const pending = this.pending.get(requestId);
+    const entityId =
+      typeof message.entityId === "string" ? message.entityId : "";
+    const pendingKey = decodeKey(requestId, entityId);
+    const pending = this.pending.get(pendingKey);
 
     if (message.type === "preview.queue") {
       return;
@@ -173,6 +189,7 @@ export class PreviewDecoderClient {
       if (
         !pending ||
         requestId !== this.latestRequestId ||
+        response.entityId !== pending.entityId ||
         response.generation !== pending.generation ||
         response.projectRevision !== pending.projectRevision
       ) {
@@ -193,11 +210,12 @@ export class PreviewDecoderClient {
         });
         return;
       }
-      this.pending.delete(requestId);
+      this.pending.delete(pendingKey);
       this.detachAbort(pending);
       const lease = this.lifecycle.trackClosable("video-frame", response.frame);
       pending.resolve({
         decodeFromUs: response.decodeFromUs,
+        entityId,
         frame: response.frame,
         generation: response.generation,
         release: () => lease.release(),
@@ -211,7 +229,7 @@ export class PreviewDecoderClient {
     if (message.type === "preview.dropped") {
       this.droppedFrames += 1;
       if (pending) {
-        this.pending.delete(requestId);
+        this.pending.delete(pendingKey);
         this.detachAbort(pending);
         pending.reject(abortError(message.reason ?? "Decode dropped"));
       }
@@ -219,7 +237,7 @@ export class PreviewDecoderClient {
     }
 
     if (message.type === "preview.error" && pending) {
-      this.pending.delete(requestId);
+      this.pending.delete(pendingKey);
       this.detachAbort(pending);
       pending.reject(new Error(message.error ?? "Preview decode failed"));
     }
@@ -243,6 +261,7 @@ export class PreviewDecoderClient {
     sourceTimeUs: number,
     projectRevision: number,
     requestId: string,
+    entityId: string,
     generation = 0,
     signal?: AbortSignal,
   ): Promise<DecodedPreviewFrame> {
@@ -256,18 +275,22 @@ export class PreviewDecoderClient {
     }
     this.latestRequestId = requestId;
     const metadata = previewSourceMetadata(source);
+    const pendingKey = decodeKey(requestId, entityId);
     return new Promise<DecodedPreviewFrame>((resolve, reject) => {
       const pending: PendingDecode = {
+        entityId,
         generation,
         projectRevision,
         reject,
+        requestId,
         resolve,
         signal,
       };
       if (signal) {
         pending.abort = () => {
-          this.pending.delete(requestId);
+          this.pending.delete(pendingKey);
           this.worker.postMessage({
+            entityId,
             operation: "cancel",
             reason: String(signal.reason ?? "Decode cancelled"),
             requestId,
@@ -278,10 +301,11 @@ export class PreviewDecoderClient {
         };
         signal.addEventListener("abort", pending.abort, { once: true });
       }
-      this.pending.set(requestId, pending);
+      this.pending.set(pendingKey, pending);
       this.worker.postMessage({
         cacheKey: metadata.cacheKey,
         diagnosticLogs: this.diagnosticLogsEnabled(),
+        entityId,
         frameRate: metadata.frameRate,
         generation,
         keyframes: source.keyframes,
@@ -323,13 +347,14 @@ export class PreviewDecoderClient {
       return;
     }
     this.disposed = true;
-    for (const [requestId, pending] of this.pending) {
+    for (const pending of this.pending.values()) {
       this.detachAbort(pending);
       pending.reject(abortError("Preview decoder disposed"));
       this.worker.postMessage({
+        entityId: pending.entityId,
         operation: "cancel",
         reason: "Preview decoder disposed",
-        requestId,
+        requestId: pending.requestId,
         type: "preview.request",
         version: PREVIEW_DECODE_PROTOCOL_VERSION,
       });

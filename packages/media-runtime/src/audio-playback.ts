@@ -32,6 +32,7 @@ export type PlaybackMediaSource =
 export type AudioTimelineClip = {
   assetId: string;
   id: string;
+  muted?: boolean;
   sourceEndUs: number;
   sourceStartUs: number;
   timelineStartUs: number;
@@ -296,6 +297,9 @@ export class MediabunnyAudioPlayback {
     }
     const output: ScheduledBuffer[] = [];
     for (const clip of request.clips) {
+      if (clip.muted) {
+        continue;
+      }
       const clipEndUs =
         clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs;
       const intersectionStartUs = Math.max(startUs, clip.timelineStartUs);

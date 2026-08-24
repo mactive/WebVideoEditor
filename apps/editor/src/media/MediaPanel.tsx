@@ -86,10 +86,21 @@ export type TimelineAddContext = {
   risk: string;
 };
 
+export type TimelineAddKind = "audio" | "video";
+export type TimelineAddPlacement = "append" | "playhead";
+export type TimelineAddOptions = {
+  kind: TimelineAddKind;
+  placement: TimelineAddPlacement;
+};
+
 export type MediaPanelProps = {
   actionAvailability?: ActionAvailability;
   logHub?: LogHub;
-  onAddToTimeline?: (assetId: string, context: TimelineAddContext) => void;
+  onAddToTimeline?: (
+    assetId: string,
+    context: TimelineAddContext,
+    options: TimelineAddOptions,
+  ) => void;
   onAssetImported?: (
     asset: Asset,
     result: MediaProbeResult,
@@ -678,26 +689,73 @@ export function MediaPanel({
                         <span>{addContext.risk}</span>
                       </div>
                     ) : null}
-                    <button
-                      className="media-panel__add"
-                      data-testid={`add-${item.result.source.name}`}
-                      onClick={() =>
-                        onAddToTimeline?.(
-                          mediaProbeToProjectAsset(item.result!).id,
-                          addContext!,
+                    <div className="media-panel__add-actions">
+                      <button
+                        className="media-panel__add"
+                        data-testid={`add-${item.result.source.name}`}
+                        onClick={() =>
+                          onAddToTimeline?.(
+                            mediaProbeToProjectAsset(item.result!).id,
+                            addContext!,
+                            { kind: "video", placement: "playhead" },
+                          )
+                        }
+                        type="button"
+                      >
+                        {addContext?.previewSource === "proxy"
+                          ? "添加到时间线"
+                          : "立即添加到时间线（source fallback）"}
+                        {timelineAssetIds.includes(
+                          mediaProbeToProjectAsset(item.result).id,
                         )
-                      }
-                      type="button"
-                    >
-                      {addContext?.previewSource === "proxy"
-                        ? "添加到时间线"
-                        : "立即添加到时间线（source fallback）"}
-                      {timelineAssetIds.includes(
-                        mediaProbeToProjectAsset(item.result).id,
-                      )
-                        ? "（可重复）"
-                        : ""}
-                    </button>
+                          ? "（可重复）"
+                          : ""}
+                      </button>
+                      <button
+                        className="media-panel__add media-panel__add--secondary"
+                        onClick={() =>
+                          onAddToTimeline?.(
+                            mediaProbeToProjectAsset(item.result!).id,
+                            addContext!,
+                            { kind: "video", placement: "append" },
+                          )
+                        }
+                        type="button"
+                      >
+                        追加视频到目标轨尾
+                      </button>
+                      {mediaProbeToProjectAsset(item.result).hasAudio ? (
+                        <>
+                          <button
+                            className="media-panel__add media-panel__add--audio"
+                            data-testid={`add-audio-${item.result.source.name}`}
+                            onClick={() =>
+                              onAddToTimeline?.(
+                                mediaProbeToProjectAsset(item.result!).id,
+                                addContext!,
+                                { kind: "audio", placement: "playhead" },
+                              )
+                            }
+                            type="button"
+                          >
+                            添加音频到时间线
+                          </button>
+                          <button
+                            className="media-panel__add media-panel__add--secondary"
+                            onClick={() =>
+                              onAddToTimeline?.(
+                                mediaProbeToProjectAsset(item.result!).id,
+                                addContext!,
+                                { kind: "audio", placement: "append" },
+                              )
+                            }
+                            type="button"
+                          >
+                            追加音频到目标轨尾
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </>
                 ) : null}
                 {item.proxy ? (

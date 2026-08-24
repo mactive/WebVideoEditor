@@ -36,6 +36,12 @@ PreviewRuntime
 ```ts
 type RuntimeEvaluation = {
   activeEntities: readonly RuntimeEntity[];
+  activeVideos: readonly {
+    assetId: string;
+    entityId: string;
+    order: number;
+    sourceTimeUs: number;
+  }[];
   playheadUs: number;
   revision: number;
   video?: {
@@ -46,36 +52,55 @@ type RuntimeEvaluation = {
 };
 ```
 
+`video` 字段保留为兼容单层调用方的第一个 active video；多视频轨道实际消费
+`activeVideos`。该数组按轨道 `order` 排序，PreviewRuntime 会为同一 playhead 上的每个
+active video entity 发起解码请求，并把 `entityId` 带入 request / response，避免 V1/V2 的
+过期帧互相覆盖。
+
 真实例子：
 
 ```json
 {
   "playheadUs": 12500000,
   "revision": 8,
-  "video": {
-    "assetId": "asset-test-2",
-    "entityId": "clip:clip-1",
-    "sourceTimeUs": 12500000
-  }
+  "activeVideos": [
+    {
+      "assetId": "asset-test-2",
+      "entityId": "clip:clip-1",
+      "order": 0,
+      "sourceTimeUs": 12500000
+    },
+    {
+      "assetId": "asset-test-2",
+      "entityId": "clip:clip-2",
+      "order": 3,
+      "sourceTimeUs": 3500000
+    }
+  ]
 }
 ```
 
-这一层的输出不是媒体数据，而是“要向哪个素材取哪个时间点”。随后它会组装一个内部 decode job：
+这一层的输出不是媒体数据，而是“每个视频层要向哪个素材取哪个时间点”。随后它会组装一个内部
+decode batch：
 
 ```ts
-type DecodeJob = {
+type DecodeBatch = {
   generation: number;
+  layers: readonly {
+    entityId: string;
+    source: PreviewSource;
+    sourceTimeUs: number;
+  }[];
   origin: "seek" | "playback";
   playheadUs: number;
   projectRevision: number;
   requestId: string;
-  source: PreviewSource;
-  sourceTimeUs: number;
 };
 ```
 
 其中 `generation` 用来隔离播放时钟重置，`projectRevision` 用来隔离项目状态变化，`requestId`
-用来隔离连续 seek。
+用来隔离连续 seek。一次 batch 内的多层共享同一个 requestId/revision/generation，但每层有
+独立 `entityId` 和 `sourceTimeUs`。
 
 ## 2. PreviewSource 描述素材入口
 
@@ -160,6 +185,7 @@ proxy 未完成或需要直读测试素材时，`mediaUrl` 指向可 Range 读�
 type PreviewDecodeRequest = {
   cacheKey: string;
   diagnosticLogs: boolean;
+  entityId: string;
   frameRate: number;
   generation: number;
   keyframes: readonly ProxyKeyframe[];
@@ -181,6 +207,7 @@ type PreviewDecodeRequest = {
   "version": 1,
   "operation": "decode",
   "requestId": "preview-seek-42",
+  "entityId": "clip:clip-2",
   "projectRevision": 8,
   "generation": 3,
   "cacheKey": "proxy-a1b2",
@@ -204,6 +231,7 @@ type PreviewDecodeRequest = {
 
 ```ts
 type PreviewDecodeCancel = {
+  entityId: string;
   operation: "cancel";
   reason?: string;
   requestId: string;
@@ -219,7 +247,7 @@ Worker 收到请求后先进入 `MediabunnyDecoderQueueAdapter`。当前预览�
 ```ts
 {
   concurrency: 1,
-  highWatermark: 1,
+  highWatermark: 8,
   overflowPolicy: "replace-oldest"
 }
 ```
@@ -385,7 +413,10 @@ type VideoFrameShape = {
   format: VideoPixelFormat | null; // 例如 "I420"、"NV12"、"RGBA"
   colorSpace: VideoColorSpace;
   allocationSize(options?: VideoFrameCopyToOptions): number;
-  copyTo(destination: BufferSource, options?: VideoFrameCopyToOptions): Promise<PlaneLayout[]>;
+  copyTo(
+    destination: BufferSource,
+    options?: VideoFrameCopyToOptions,
+  ): Promise<PlaneLayout[]>;
   close(): void;
 };
 ```
@@ -435,6 +466,7 @@ type PreviewFrameResponse = {
   decodeFromUs: number;
   decodeQueue: number;
   decoderQueue: CodecQueueObservation;
+  entityId: string;
   frame: VideoFrame;
   generation: number;
   projectRevision: number;
@@ -459,6 +491,7 @@ postMessage(response, [frame]);
   "type": "preview.frame",
   "version": 1,
   "requestId": "preview-seek-42",
+  "entityId": "clip:clip-2",
   "projectRevision": 8,
   "generation": 3,
   "decodeFromUs": 12000000,
@@ -472,7 +505,7 @@ postMessage(response, [frame]);
       "active": 1,
       "queued": 0,
       "concurrency": 1,
-      "highWatermark": 1,
+      "highWatermark": 8,
       "activePeak": 1,
       "queuedPeak": 0,
       "backpressureCount": 0
@@ -495,6 +528,7 @@ postMessage(response, [frame]);
 type PreviewDroppedResponse = {
   decodeQueue: number;
   decoderQueue: CodecQueueObservation;
+  entityId: string;
   reason: "cancelled" | "superseded";
   requestId: string;
   type: "preview.dropped";
@@ -504,6 +538,7 @@ type PreviewDroppedResponse = {
 type PreviewErrorResponse = {
   decodeQueue: number;
   decoderQueue: CodecQueueObservation;
+  entityId: string;
   error: string;
   projectRevision: number;
   requestId: string;
@@ -520,6 +555,7 @@ type PreviewErrorResponse = {
 if (
   !pending ||
   requestId !== latestRequestId ||
+  response.entityId !== pending.entityId ||
   response.generation !== pending.generation ||
   response.projectRevision !== pending.projectRevision
 ) {
@@ -536,6 +572,7 @@ const lease = lifecycle.trackClosable("video-frame", response.frame);
 
 pending.resolve({
   decodeFromUs: response.decodeFromUs,
+  entityId: response.entityId,
   frame: response.frame,
   release: () => lease.release(),
   requestId,
@@ -548,6 +585,7 @@ pending.resolve({
 
 ```ts
 renderer.present(decoded.frame, {
+  entityId: job.entityId,
   playheadUs: job.playheadUs,
   projectRevision: job.projectRevision,
   requestId: job.requestId,
@@ -590,14 +628,14 @@ application.render();
 
 ## 11. 数据所有权总表
 
-| 阶段 | 输入 | 输出 | 是否 JSON | 是否跨线程 | 释放责任 |
-| --- | --- | --- | --- | --- | --- |
-| Runtime evaluate | Project JSON、playheadUs | `RuntimeEvaluation` | 是 | 否 | 无 |
-| Decode request | `PreviewSource`、sourceTimeUs | `PreviewDecodeRequest` | 是 | 主线程 -> Worker | 无 |
-| Source open | cacheKey/mediaUrl | `Input`、`InputVideoTrack` | 否 | 否 | Worker 缓存到终止 |
-| Sample select | track、decodeFromUs/endSec | `VideoSample` | 否 | 否 | Worker `sample.close()` |
-| Frame materialize | `VideoSample` | `VideoFrame` | 否 | Worker -> 主线程 transferable | 主线程 `frame.close()` |
-| Render present | `VideoFrame` | CanvasSource/Texture 更新 | 否 | 否 | `decoded.release()` |
+| 阶段              | 输入                          | 输出                       | 是否 JSON | 是否跨线程                    | 释放责任                |
+| ----------------- | ----------------------------- | -------------------------- | --------- | ----------------------------- | ----------------------- |
+| Runtime evaluate  | Project JSON、playheadUs      | `RuntimeEvaluation`        | 是        | 否                            | 无                      |
+| Decode request    | `PreviewSource`、sourceTimeUs | `PreviewDecodeRequest`     | 是        | 主线程 -> Worker              | 无                      |
+| Source open       | cacheKey/mediaUrl             | `Input`、`InputVideoTrack` | 否        | 否                            | Worker 缓存到终止       |
+| Sample select     | track、decodeFromUs/endSec    | `VideoSample`              | 否        | 否                            | Worker `sample.close()` |
+| Frame materialize | `VideoSample`                 | `VideoFrame`               | 否        | Worker -> 主线程 transferable | 主线程 `frame.close()`  |
+| Render present    | `VideoFrame`                  | CanvasSource/Texture 更新  | 否        | 否                            | `decoded.release()`     |
 
 ## 源码证据
 
