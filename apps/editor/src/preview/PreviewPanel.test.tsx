@@ -442,6 +442,35 @@ describe("PreviewPanel metrics disclosure", () => {
     cleanup();
   });
 
+  it("switches the preview stage between the supported aspect ratios", async () => {
+    await renderReadyPreview();
+
+    const stage = screen.getByTestId("preview-stage");
+    expect(stage.getAttribute("data-preview-aspect-ratio")).toBe("16:9");
+    expect(stage.style.getPropertyValue("--preview-aspect-ratio")).toBe(
+      "16 / 9",
+    );
+
+    for (const [label, cssValue] of [
+      ["9:16", "9 / 16"],
+      ["4:3", "4 / 3"],
+      ["1:1", "1 / 1"],
+      ["3:4", "3 / 4"],
+      ["16:9", "16 / 9"],
+    ] as const) {
+      fireEvent.click(screen.getByRole("button", { name: label }));
+      expect(stage.getAttribute("data-preview-aspect-ratio")).toBe(label);
+      expect(stage.style.getPropertyValue("--preview-aspect-ratio")).toBe(
+        cssValue,
+      );
+      expect(
+        screen
+          .getByRole("button", { name: label })
+          .getAttribute("aria-pressed"),
+      ).toBe("true");
+    }
+  });
+
   it("defaults to expanded metrics and collapses to a compact live summary", async () => {
     await renderReadyPreview();
 

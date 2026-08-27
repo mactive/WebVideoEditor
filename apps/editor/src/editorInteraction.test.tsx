@@ -389,6 +389,38 @@ function setLaneRect(testId: string, top: number, bottom: number) {
   });
 }
 
+function setTimelineRulerRect(left = 0, width = 800) {
+  const ruler = screen.getByTestId("timeline-ruler") as HTMLElement;
+  Object.defineProperty(ruler, "getBoundingClientRect", {
+    configurable: true,
+    value: vi.fn(() => ({
+      bottom: 32,
+      height: 32,
+      left,
+      right: left + width,
+      top: 0,
+      width,
+      x: left,
+      y: 0,
+      toJSON: () => ({}),
+    })),
+  });
+  return ruler;
+}
+
+function seekTimelineRulerAtUs(timeUs: number, pointerId = 1) {
+  const ruler = setTimelineRulerRect();
+  const pixelsPerSecond = Number(ruler.dataset.pixelsPerSecond);
+  firePointerEvent(ruler, "pointerdown", {
+    clientX: (timeUs / 1_000_000) * pixelsPerSecond,
+    pointerId,
+  });
+  firePointerEvent(ruler, "pointerup", {
+    clientX: (timeUs / 1_000_000) * pixelsPerSecond,
+    pointerId,
+  });
+}
+
 describe("editor interactions", () => {
   it("routes timeline selection, playhead, and toolbar actions", () => {
     const onAddTitle = vi.fn();
@@ -427,20 +459,141 @@ describe("editor interactions", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "视频片段 test.mp4" }));
-    fireEvent.change(screen.getByRole("slider", { name: "时间线播放头" }), {
-      target: { value: "2000000" },
-    });
+    seekTimelineRulerAtUs(2_000_000);
     fireEvent.click(screen.getByRole("button", { name: "添加标题" }));
     fireEvent.click(screen.getByRole("button", { name: "新增音频轨" }));
 
     expect(onSelectClip).toHaveBeenCalledWith("clip");
     expect(onSelectTargetVideoTrack).toHaveBeenCalledWith("video-track");
     expect(onPlayheadChange).toHaveBeenCalledWith(2_000_000);
+    expect(screen.queryByRole("slider", { name: "时间线播放头" })).toBeNull();
     expect(onAddTitle).toHaveBeenCalledOnce();
     expect(onAddAudioTrack).toHaveBeenCalledOnce();
     expect(screen.getByTestId("audio-track").textContent).not.toContain(
       "test.mp4",
     );
+  });
+
+  it("seeks from the timeline ruler click and drag with clamping", () => {
+    const onPlayheadChange = vi.fn();
+    const project = projectFixture();
+    project.timeline.durationUs = 10_000_000;
+    const restorePointerCapture = mockPointerCapture();
+    try {
+      render(
+        <Timeline
+          canRedo={false}
+          canUndo={false}
+          onAddAudioTrack={vi.fn()}
+          onAddTitle={vi.fn()}
+          onAddVideoTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onDeleteTrack={vi.fn()}
+          onEdit={vi.fn()}
+          onPlayheadChange={onPlayheadChange}
+          onRedo={vi.fn()}
+          onReorderTracks={vi.fn()}
+          onSelectClip={vi.fn()}
+          onSelectTargetAudioTrack={vi.fn()}
+          onSelectTargetVideoTrack={vi.fn()}
+          onSelectText={vi.fn()}
+          onTimelineDurationChange={vi.fn()}
+          onSplit={vi.fn()}
+          onUndo={vi.fn()}
+          playheadUs={0}
+          project={project}
+          selectedClipId={null}
+          selectedTextId={null}
+          targetAudioTrackId="audio-track"
+          targetVideoTrackId="video-track"
+        />,
+      );
+
+      const ruler = setTimelineRulerRect(20, 800);
+      firePointerEvent(ruler, "pointerdown", {
+        clientX: 180,
+        pointerId: 1,
+      });
+      firePointerEvent(ruler, "pointermove", {
+        clientX: -20,
+        pointerId: 1,
+      });
+      firePointerEvent(ruler, "pointermove", {
+        clientX: 2_000,
+        pointerId: 1,
+      });
+      firePointerEvent(ruler, "pointerup", {
+        clientX: 2_000,
+        pointerId: 1,
+      });
+
+      expect(onPlayheadChange).toHaveBeenNthCalledWith(1, 2_000_000);
+      expect(onPlayheadChange).toHaveBeenNthCalledWith(2, 0);
+      expect(onPlayheadChange).toHaveBeenNthCalledWith(3, 10_000_000);
+    } finally {
+      restorePointerCapture();
+    }
+  });
+
+  it("aligns the ruler, lane content, and playhead guide across zoom", () => {
+    const project = projectFixture();
+    project.timeline.durationUs = 60_000_000;
+    render(
+      <Timeline
+        canRedo={false}
+        canUndo={false}
+        onAddAudioTrack={vi.fn()}
+        onAddTitle={vi.fn()}
+        onAddVideoTrack={vi.fn()}
+        onDelete={vi.fn()}
+        onDeleteTrack={vi.fn()}
+        onEdit={vi.fn()}
+        onPlayheadChange={vi.fn()}
+        onRedo={vi.fn()}
+        onReorderTracks={vi.fn()}
+        onSelectClip={vi.fn()}
+        onSelectTargetAudioTrack={vi.fn()}
+        onSelectTargetVideoTrack={vi.fn()}
+        onSelectText={vi.fn()}
+        onTimelineDurationChange={vi.fn()}
+        onSplit={vi.fn()}
+        onUndo={vi.fn()}
+        playheadUs={2_000_000}
+        project={project}
+        selectedClipId={null}
+        selectedTextId={null}
+        targetAudioTrackId="audio-track"
+        targetVideoTrackId="video-track"
+      />,
+    );
+
+    const timeline = screen.getByLabelText("时间线") as HTMLElement;
+    const content = screen.getByTestId("timeline-content");
+    const ruler = screen.getByTestId("timeline-ruler");
+    const guide = screen.getByTestId("timeline-playhead-guide");
+    const lane = screen.getByTestId("video-track-video-track");
+    const clip = screen.getByRole("button", { name: "视频片段 test.mp4" });
+
+    expect(ruler.parentElement).toBe(content);
+    expect(lane.parentElement).toBe(content);
+    expect(guide.parentElement).toBe(content);
+    expect(timeline.style.getPropertyValue("--timeline-content-width")).toBe(
+      "4800px",
+    );
+    expect((guide as HTMLElement).style.left).toBe("160px");
+    expect((clip as HTMLElement).style.width).toBe("400px");
+    expect(screen.getByText("00:00")).toBeTruthy();
+    expect(screen.getByText("1:00.0")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("slider", { name: "时间线缩放" }), {
+      target: { value: "160" },
+    });
+
+    expect(timeline.style.getPropertyValue("--timeline-content-width")).toBe(
+      "9600px",
+    );
+    expect((guide as HTMLElement).style.left).toBe("320px");
+    expect((clip as HTMLElement).style.width).toBe("800px");
   });
 
   it("sets timeline duration from presets and exact seconds input", () => {
@@ -1245,10 +1398,14 @@ describe("editor interactions", () => {
       const firstClip = screen.getAllByRole("button", {
         name: "视频片段 test.mp4",
       })[0]!;
-      firePointerEvent(screen.getAllByLabelText("裁剪 视频 test.mp4 结尾")[0]!, "pointerdown", {
-        clientX: 0,
-        pointerId: 1,
-      });
+      firePointerEvent(
+        screen.getAllByLabelText("裁剪 视频 test.mp4 结尾")[0]!,
+        "pointerdown",
+        {
+          clientX: 0,
+          pointerId: 1,
+        },
+      );
       firePointerEvent(firstClip, "pointermove", {
         clientX: 200,
         pointerId: 1,
@@ -1262,9 +1419,7 @@ describe("editor interactions", () => {
         }),
         expect.any(String),
       );
-      expect(screen.getByRole("status").textContent).toContain(
-        "同轨相邻片段",
-      );
+      expect(screen.getByRole("status").textContent).toContain("同轨相邻片段");
     } finally {
       restorePointerCapture();
     }
@@ -1499,6 +1654,42 @@ describe("editor interactions", () => {
     });
   });
 
+  it("resizes and minimizes the upper media and preview workspace", () => {
+    render(<App />);
+
+    const workspace = screen.getByTestId("editor-workspace");
+    const heightControl = screen.getByLabelText(
+      "上部区域高度",
+    ) as HTMLInputElement;
+
+    expect(workspace.style.getPropertyValue("--editor-workspace-height")).toBe(
+      "570px",
+    );
+
+    fireEvent.change(heightControl, { target: { value: "430" } });
+
+    expect(workspace.style.getPropertyValue("--editor-workspace-height")).toBe(
+      "430px",
+    );
+    expect(heightControl.value).toBe("430");
+
+    fireEvent.click(screen.getByRole("button", { name: "最小化上部" }));
+
+    expect(workspace.getAttribute("data-collapsed")).toBe("true");
+    expect(workspace.style.getPropertyValue("--editor-workspace-height")).toBe(
+      "260px",
+    );
+    expect(heightControl.disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "展开上部" }));
+
+    expect(workspace.getAttribute("data-collapsed")).toBe("false");
+    expect(workspace.style.getPropertyValue("--editor-workspace-height")).toBe(
+      "430px",
+    );
+    expect(heightControl.disabled).toBe(false);
+  });
+
   it("keeps a configured long timeline duration after adding a short asset", async () => {
     render(<App />);
 
@@ -1678,10 +1869,10 @@ describe("editor interactions", () => {
     const { container } = render(<App initialProject={project} />);
 
     try {
-      fireEvent.change(screen.getByRole("slider", { name: "时间线播放头" }), {
-        target: { value: "2000000" },
-      });
-      fireEvent.click(screen.getByRole("button", { name: "视频片段 test.mp4" }));
+      seekTimelineRulerAtUs(2_000_000);
+      fireEvent.click(
+        screen.getByRole("button", { name: "视频片段 test.mp4" }),
+      );
       fireEvent.click(screen.getByRole("button", { name: "播放头分割" }));
       fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
 
@@ -1765,10 +1956,10 @@ describe("editor interactions", () => {
     const { container } = render(<App initialProject={project} />);
 
     try {
-      fireEvent.change(screen.getByRole("slider", { name: "时间线播放头" }), {
-        target: { value: "2000000" },
-      });
-      fireEvent.click(screen.getByRole("button", { name: "音频片段 test.mp4" }));
+      seekTimelineRulerAtUs(2_000_000);
+      fireEvent.click(
+        screen.getByRole("button", { name: "音频片段 test.mp4" }),
+      );
       fireEvent.click(screen.getByRole("button", { name: "播放头分割" }));
       fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
 

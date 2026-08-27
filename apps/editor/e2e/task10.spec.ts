@@ -44,6 +44,40 @@ async function projectJson(page: import("@playwright/test").Page) {
   };
 }
 
+async function seekTimelineRulerAtUs(
+  page: import("@playwright/test").Page,
+  timeUs: number,
+) {
+  await page.getByTestId("timeline-ruler").evaluate((ruler, timeUs) => {
+    const element = ruler as HTMLElement;
+    const pixelsPerSecond = Number(element.dataset.pixelsPerSecond);
+    const box = element.getBoundingClientRect();
+    const clientX = box.left + (timeUs / 1_000_000) * pixelsPerSecond;
+    const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+    HTMLElement.prototype.setPointerCapture = () => undefined;
+    try {
+      element.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          pointerId: 1,
+        }),
+      );
+      element.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          pointerId: 1,
+        }),
+      );
+    } finally {
+      HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+    }
+  }, timeUs);
+}
+
 test("edits two real assets with title, filter, split, and Undo/Redo", async ({
   page,
 }) => {
@@ -117,7 +151,7 @@ test("edits two real assets with title, filter, split, and Undo/Redo", async ({
   await page.getByLabel("时间线起点（秒）").fill("9");
 
   await page.locator("[data-clip-id]").nth(0).click();
-  await page.getByRole("slider", { name: "时间线播放头" }).fill("4000000");
+  await seekTimelineRulerAtUs(page, 4_000_000);
   await page.getByRole("button", { name: "播放头分割" }).click();
   await expect(page.locator("[data-clip-id]")).toHaveCount(3);
 

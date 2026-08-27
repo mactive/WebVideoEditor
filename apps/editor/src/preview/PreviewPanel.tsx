@@ -25,7 +25,13 @@ import {
   type PreviewRuntimeSnapshot,
   type PreviewSource,
 } from "@web-video-editor/preview-runtime";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { ActionAvailability } from "../capabilities";
 import "./PreviewPanel.css";
@@ -54,6 +60,16 @@ type RuntimeDashboardSample = {
   sampledAtMs: number;
   storage: StorageEstimateMetrics;
 };
+
+const PREVIEW_ASPECT_RATIOS = [
+  { height: 16, label: "9:16", width: 9 },
+  { height: 3, label: "4:3", width: 4 },
+  { height: 1, label: "1:1", width: 1 },
+  { height: 4, label: "3:4", width: 3 },
+  { height: 9, label: "16:9", width: 16 },
+] as const;
+
+type PreviewAspectRatio = (typeof PREVIEW_ASPECT_RATIOS)[number]["label"];
 
 declare global {
   interface Window {
@@ -185,8 +201,29 @@ export function PreviewPanel({
     }),
   );
   const [metricsExpanded, setMetricsExpanded] = useState(true);
+  const [aspectRatio, setAspectRatio] = useState<PreviewAspectRatio>("16:9");
   const previewEnabled = actionAvailability?.enabled === true;
   const hasPreviewSources = sources.length > 0;
+  const selectedAspectRatio =
+    PREVIEW_ASPECT_RATIOS.find((ratio) => ratio.label === aspectRatio) ??
+    PREVIEW_ASPECT_RATIOS[4];
+  const previewStageStyle = {
+    "--preview-aspect-ratio": `${selectedAspectRatio.width} / ${selectedAspectRatio.height}`,
+  } as CSSProperties;
+  const aspectRatioSelector = (
+    <div className="preview-panel__aspect" aria-label="预览比例" role="group">
+      {PREVIEW_ASPECT_RATIOS.map((ratio) => (
+        <button
+          aria-pressed={aspectRatio === ratio.label}
+          key={ratio.label}
+          onClick={() => setAspectRatio(ratio.label)}
+          type="button"
+        >
+          {ratio.label}
+        </button>
+      ))}
+    </div>
+  );
   const sourceKey = sources
     .map((source) => {
       const metadata = previewSourceMetadata(source);
@@ -451,16 +488,30 @@ export function PreviewPanel({
               代理按关键帧解码 VideoFrame。
             </p>
           </div>
-          <a href="/">返回能力与素材页</a>
+          <div className="preview-panel__heading-actions">
+            {aspectRatioSelector}
+            <a href="/">返回能力与素材页</a>
+          </div>
         </div>
       ) : (
-        <h2 className="preview-panel__embedded-title" id="preview-panel-title">
-          实时预览
-        </h2>
+        <div className="preview-panel__titlebar">
+          <h2
+            className="preview-panel__embedded-title"
+            id="preview-panel-title"
+          >
+            实时预览
+          </h2>
+          {aspectRatioSelector}
+        </div>
       )}
 
       <div className="preview-panel__workspace">
-        <div className="preview-panel__stage">
+        <div
+          className="preview-panel__stage"
+          data-preview-aspect-ratio={aspectRatio}
+          data-testid="preview-stage"
+          style={previewStageStyle}
+        >
           <div
             className="preview-panel__canvas"
             data-testid="pixi-preview-host"

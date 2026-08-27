@@ -6,8 +6,7 @@
   border-radius: 10px;
 }
 
-.timeline__toolbar,
-.timeline__ruler {
+.timeline__toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -25,7 +24,7 @@
 }
 
 .timeline__toolbar span,
-.timeline__ruler span {
+.timeline__ruler-label {
   color: #7f8999;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 10px;
@@ -75,33 +74,91 @@
   opacity: 0.4;
 }
 
-.timeline__ruler {
-  margin: 0 0 8px 136px;
-}
-
-.timeline__ruler-scroll {
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.timeline__ruler input {
-  display: block;
-  max-width: none;
-  accent-color: #8b9cff;
-}
-
-.timeline__tracks {
+.timeline__body {
   display: grid;
-  gap: 5px;
-  overflow-x: auto;
-}
-
-.timeline__track {
-  display: grid;
-  grid-template-columns: 128px minmax(var(--timeline-content-width), 1fr);
+  grid-template-columns: 128px minmax(0, 1fr);
   gap: 8px;
-  min-height: 42px;
+  min-width: 0;
+}
+
+.timeline__track-headers,
+.timeline__content {
+  display: grid;
+  grid-template-rows: 32px;
+  grid-auto-rows: 42px;
+  gap: 5px;
+}
+
+.timeline__content-scroll {
+  overflow-x: auto;
+}
+
+.timeline__content {
+  position: relative;
+  width: var(--timeline-content-width);
+}
+
+.timeline__ruler-spacer {
+  height: 32px;
+}
+
+.timeline__ruler {
+  position: relative;
+  height: 32px;
+  width: var(--timeline-content-width);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.timeline__ruler::before {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: #2d3545;
+  content: "";
+}
+
+.timeline__ruler-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 8px;
+  background: rgb(255 255 255 / 18%);
+  pointer-events: none;
+  transform: translateX(-0.5px);
+}
+
+.timeline__ruler-tick--major {
+  height: 16px;
+  background: rgb(255 255 255 / 35%);
+}
+
+.timeline__ruler-label {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.timeline__ruler-tick--first .timeline__ruler-label {
+  transform: none;
+}
+
+.timeline__ruler-tick--last .timeline__ruler-label {
+  transform: translateX(-100%);
+}
+
+.timeline__playhead-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 2px;
+  background: #ff3b30;
+  pointer-events: none;
+  transform: translateX(-1px);
 }
 
 .timeline__track-header {
@@ -146,6 +203,7 @@
 
 .timeline__lane {
   position: relative;
+  z-index: 1;
   width: var(--timeline-content-width);
   min-width: 0;
   overflow: hidden;

@@ -17,8 +17,10 @@ import {
 } from "@web-video-editor/observability";
 import type { PreviewSource } from "@web-video-editor/preview-runtime";
 import {
+  type CSSProperties,
   useEffect,
   useMemo,
+  type PointerEvent,
   useRef,
   useState,
   useSyncExternalStore,
@@ -64,6 +66,18 @@ type RuntimeSource = {
 };
 
 type DebugTab = "capabilities" | "json" | "logs" | "sync";
+
+const TOP_WORKSPACE_DEFAULT_HEIGHT_PX = 570;
+const TOP_WORKSPACE_MIN_HEIGHT_PX = 280;
+const TOP_WORKSPACE_MAX_HEIGHT_PX = 780;
+const TOP_WORKSPACE_COLLAPSED_HEIGHT_PX = 260;
+
+function clampTopWorkspaceHeight(value: number): number {
+  return Math.max(
+    TOP_WORKSPACE_MIN_HEIGHT_PX,
+    Math.min(TOP_WORKSPACE_MAX_HEIGHT_PX, Math.round(value)),
+  );
+}
 
 declare global {
   interface Window {
@@ -167,6 +181,10 @@ export function App({ initialProject }: AppProps = {}) {
   const [debugTab, setDebugTab] = useState<DebugTab>("logs");
   const [structuredLoggingEnabled, setStructuredLoggingEnabled] =
     useState(false);
+  const [topWorkspaceHeightPx, setTopWorkspaceHeightPx] = useState(
+    TOP_WORKSPACE_DEFAULT_HEIGHT_PX,
+  );
+  const [topWorkspaceCollapsed, setTopWorkspaceCollapsed] = useState(false);
   const [runtimeSources, setRuntimeSources] = useState<
     Record<string, RuntimeSource>
   >({});
@@ -261,6 +279,31 @@ export function App({ initialProject }: AppProps = {}) {
       ),
     [runtimeSources],
   );
+  const visibleTopWorkspaceHeightPx = topWorkspaceCollapsed
+    ? TOP_WORKSPACE_COLLAPSED_HEIGHT_PX
+    : topWorkspaceHeightPx;
+  const topWorkspaceStyle = {
+    "--editor-workspace-height": `${visibleTopWorkspaceHeightPx}px`,
+  } as CSSProperties;
+  const beginTopWorkspaceResize = (event: PointerEvent<HTMLButtonElement>) => {
+    if (topWorkspaceCollapsed) {
+      return;
+    }
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = topWorkspaceHeightPx;
+    const resize = (moveEvent: globalThis.PointerEvent) => {
+      setTopWorkspaceHeightPx(
+        clampTopWorkspaceHeight(startHeight + moveEvent.clientY - startY),
+      );
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", resize);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", resize);
+    window.addEventListener("pointerup", stop, { once: true });
+  };
 
   useEffect(() => {
     logHub.setEnabled(structuredLoggingEnabled);
@@ -654,49 +697,100 @@ export function App({ initialProject }: AppProps = {}) {
         {status}
       </p>
 
-      <div className="editor__workspace">
-        <div className="editor__media">
-          <MediaPanel
-            actionAvailability={actions.get("import")}
-            logHub={logHub}
-            onAddToTimeline={addToTimeline}
-            onAssetImported={importAsset}
-            onProxyReady={(asset, result) =>
-              setRuntimeSources((sources) => ({
-                ...sources,
-                [asset.id]: proxyRuntimeSource(asset, result),
-              }))
-            }
-            projectAssets={project.assets}
-            timelineAssetIds={project.clips.map((clip) => clip.assetId)}
-          />
+      <section className="editor__top-panel" aria-label="素材和预览区域">
+        <div className="editor__top-controls">
+          <div className="editor__top-summary">
+            <span>上部区域</span>
+            <strong>
+              {topWorkspaceCollapsed
+                ? "最小化"
+                : `${visibleTopWorkspaceHeightPx}px`}
+            </strong>
+          </div>
+          <label className="editor__height-control">
+            <span>高度</span>
+            <input
+              aria-label="上部区域高度"
+              disabled={topWorkspaceCollapsed}
+              max={TOP_WORKSPACE_MAX_HEIGHT_PX}
+              min={TOP_WORKSPACE_MIN_HEIGHT_PX}
+              onChange={(event) => {
+                setTopWorkspaceCollapsed(false);
+                setTopWorkspaceHeightPx(
+                  clampTopWorkspaceHeight(Number(event.currentTarget.value)),
+                );
+              }}
+              step={10}
+              type="range"
+              value={topWorkspaceHeightPx}
+            />
+          </label>
+          <button
+            aria-expanded={!topWorkspaceCollapsed}
+            onClick={() => setTopWorkspaceCollapsed((collapsed) => !collapsed)}
+            type="button"
+          >
+            {topWorkspaceCollapsed ? "展开上部" : "最小化上部"}
+          </button>
         </div>
-        <div className="editor__preview">
-          <PreviewPanel
-            actionAvailability={actions.get("preview")}
-            audioSources={audioSources}
-            diagnosticsLoggingEnabled={structuredLoggingEnabled}
-            embedded
-            logHub={logHub}
-            onPlayheadChange={(nextPlayheadUs) => {
-              if (
-                editorStore.getState().session.playheadUs !== nextPlayheadUs
-              ) {
-                editorStore.dispatch(playheadChanged(nextPlayheadUs));
+        <div
+          className={`editor__workspace${
+            topWorkspaceCollapsed ? " editor__workspace--collapsed" : ""
+          }`}
+          data-collapsed={topWorkspaceCollapsed}
+          data-testid="editor-workspace"
+          style={topWorkspaceStyle}
+        >
+          <div className="editor__media">
+            <MediaPanel
+              actionAvailability={actions.get("import")}
+              logHub={logHub}
+              onAddToTimeline={addToTimeline}
+              onAssetImported={importAsset}
+              onProxyReady={(asset, result) =>
+                setRuntimeSources((sources) => ({
+                  ...sources,
+                  [asset.id]: proxyRuntimeSource(asset, result),
+                }))
               }
-            }}
-            playheadUs={playheadUs}
+              projectAssets={project.assets}
+              timelineAssetIds={project.clips.map((clip) => clip.assetId)}
+            />
+          </div>
+          <div className="editor__preview">
+            <PreviewPanel
+              actionAvailability={actions.get("preview")}
+              audioSources={audioSources}
+              diagnosticsLoggingEnabled={structuredLoggingEnabled}
+              embedded
+              logHub={logHub}
+              onPlayheadChange={(nextPlayheadUs) => {
+                if (
+                  editorStore.getState().session.playheadUs !== nextPlayheadUs
+                ) {
+                  editorStore.dispatch(playheadChanged(nextPlayheadUs));
+                }
+              }}
+              playheadUs={playheadUs}
+              project={project}
+              sources={previewSources}
+            />
+          </div>
+          <Inspector
+            onExecute={execute}
             project={project}
-            sources={previewSources}
+            selectedClipId={selectedClipId}
+            selectedTextId={selectedTextId}
           />
         </div>
-        <Inspector
-          onExecute={execute}
-          project={project}
-          selectedClipId={selectedClipId}
-          selectedTextId={selectedTextId}
+        <button
+          aria-label="拖动调整上部区域高度"
+          className="editor__workspace-resizer"
+          disabled={topWorkspaceCollapsed}
+          onPointerDown={beginTopWorkspaceResize}
+          type="button"
         />
-      </div>
+      </section>
 
       <Timeline
         canRedo={commandController.canRedo}

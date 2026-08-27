@@ -363,9 +363,10 @@ test("manages long timeline scale, track order, cross-track moves, and deletion 
   await page.getByRole("button", { name: "10min" }).click();
   await page.getByRole("slider", { name: "时间线缩放" }).fill("20");
   await expect(page.getByText("20px/s")).toBeVisible();
-  await expect(
-    page.getByRole("slider", { name: "时间线播放头" }),
-  ).toHaveAttribute("max", "600000000");
+  await expect(page.getByTestId("timeline-ruler")).toHaveAttribute(
+    "data-duration-us",
+    "600000000",
+  );
 
   let project = await projectJson(page);
   expect(project.timeline.durationUs).toBe(600_000_000);

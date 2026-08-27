@@ -96,6 +96,18 @@ const TIMELINE_DURATION_PRESETS_US = [
 
 const MIN_TIMELINE_PIXELS_PER_SECOND = 20;
 const MAX_TIMELINE_PIXELS_PER_SECOND = 240;
+const RULER_MAJOR_TICK_TARGET_PX = 96;
+const RULER_MAX_MAJOR_TICKS = 120;
+const RULER_MINOR_TICKS_PER_MAJOR = 4;
+const RULER_MAJOR_STEP_SECONDS = [
+  0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600,
+] as const;
+
+type RulerTick = {
+  kind: "major" | "minor";
+  label?: string;
+  timeUs: number;
+};
 
 function clampPixelsPerSecond(pixelsPerSecond: number): number {
   return Math.max(
@@ -109,6 +121,64 @@ function formatTime(timeUs: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = (totalSeconds % 60).toFixed(1).padStart(4, "0");
   return `${minutes}:${seconds}`;
+}
+
+function formatRulerTime(timeUs: number): string {
+  return timeUs === 0 ? "00:00" : formatTime(timeUs);
+}
+
+function rulerMajorStepUs(durationUs: number, pixelsPerSecond: number): number {
+  const durationSeconds = durationUs / 1_000_000;
+  const stepSeconds =
+    RULER_MAJOR_STEP_SECONDS.find(
+      (step) =>
+        step * pixelsPerSecond >= RULER_MAJOR_TICK_TARGET_PX &&
+        durationSeconds / step <= RULER_MAX_MAJOR_TICKS,
+    ) ?? 600;
+  return Math.round(stepSeconds * 1_000_000);
+}
+
+function buildRulerTicks(
+  durationUs: number,
+  pixelsPerSecond: number,
+): RulerTick[] {
+  const majorStepUs = rulerMajorStepUs(durationUs, pixelsPerSecond);
+  const minorStepUs = Math.max(
+    1,
+    Math.round(majorStepUs / RULER_MINOR_TICKS_PER_MAJOR),
+  );
+  const majorTimes = new Set<number>();
+  for (let timeUs = 0; timeUs <= durationUs; timeUs += majorStepUs) {
+    majorTimes.add(timeUs);
+  }
+  majorTimes.add(durationUs);
+
+  const ticks: RulerTick[] = [];
+  const tickCount = Math.ceil(durationUs / minorStepUs);
+  for (let index = 0; index <= tickCount; index += 1) {
+    const timeUs = Math.min(durationUs, index * minorStepUs);
+    if (majorTimes.has(timeUs)) {
+      ticks.push({
+        kind: "major",
+        label: formatRulerTime(timeUs),
+        timeUs,
+      });
+    } else {
+      ticks.push({ kind: "minor", timeUs });
+    }
+  }
+  if (!ticks.some((tick) => tick.timeUs === durationUs)) {
+    ticks.push({
+      kind: "major",
+      label: formatRulerTime(durationUs),
+      timeUs: durationUs,
+    });
+  }
+  return ticks.sort((left, right) => left.timeUs - right.timeUs);
+}
+
+function clampPlayheadUs(playheadUs: number, durationUs: number): number {
+  return Math.max(0, Math.min(durationUs, Math.round(playheadUs)));
 }
 
 function durationInputValue(durationUs: number): string {
@@ -168,6 +238,7 @@ export function Timeline({
   targetVideoTrackId,
 }: TimelineProps) {
   const dragRef = useRef<DragState | undefined>(undefined);
+  const rulerDragPointerIdRef = useRef<number | undefined>(undefined);
   const trackDragRef = useRef<TrackDragState | undefined>(undefined);
   const durationUs = projectDurationUs(project);
   const contentEndUs = projectContentEndUs(project);
@@ -186,6 +257,9 @@ export function Timeline({
     1,
     timeUsToPixels(durationUs, pixelsPerSecond),
   );
+  const clampedPlayheadUs = clampPlayheadUs(playheadUs, durationUs);
+  const playheadGuideX = timeUsToPixels(clampedPlayheadUs, pixelsPerSecond);
+  const rulerTicks = buildRulerTicks(durationUs, pixelsPerSecond);
   const timelineStyle = {
     "--timeline-content-width": `${Math.ceil(timelineWidthPx)}px`,
   } as CSSProperties;
@@ -345,6 +419,7 @@ export function Timeline({
       aria-label={`轨道头 ${label}`}
       className="timeline__track-header"
       draggable
+      key={`${track.id}-header`}
       onDragEnd={() => {
         trackDragRef.current = undefined;
       }}
@@ -381,6 +456,30 @@ export function Timeline({
       return;
     }
     requestTimelineDuration(seconds * 1_000_000);
+  };
+  const playheadUsFromRulerPointer = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, event.clientX - rect.left);
+    return clampPlayheadUs(pixelsToTimeUs(x, pixelsPerSecond), durationUs);
+  };
+  const beginRulerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    rulerDragPointerIdRef.current = event.pointerId;
+    onPlayheadChange(playheadUsFromRulerPointer(event));
+  };
+  const continueRulerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (rulerDragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    onPlayheadChange(playheadUsFromRulerPointer(event));
+  };
+  const endRulerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (rulerDragPointerIdRef.current === event.pointerId) {
+      rulerDragPointerIdRef.current = undefined;
+    }
   };
 
   const beginDrag = (
@@ -569,6 +668,109 @@ export function Timeline({
     left: `${timeUsToPixels(startUs, pixelsPerSecond)}px`,
     width: `${Math.max(8, timeUsToPixels(endUs - startUs, pixelsPerSecond))}px`,
   });
+  const tickStyle = (timeUs: number): CSSProperties => ({
+    left: `${timeUsToPixels(timeUs, pixelsPerSecond)}px`,
+  });
+  const renderTrackLane = (track: ProjectDocument["tracks"][number]) => {
+    if (track.kind === "text") {
+      return (
+        <div
+          className="timeline__lane"
+          data-track-id={track.id}
+          data-testid={testIdForTrack(track)}
+          key={`${track.id}-lane`}
+        >
+          {orderedTextsForTrack(track.id).map((text) => (
+            <button
+              aria-pressed={selectedTextId === text.id}
+              className="timeline__clip timeline__clip--text"
+              key={text.id}
+              onClick={() => onSelectText(text.id)}
+              onPointerDown={(event) => beginTextDrag(event, text)}
+              onPointerMove={
+                continueDrag as unknown as (
+                  event: ReactPointerEvent<HTMLButtonElement>,
+                ) => void
+              }
+              onPointerUp={
+                endDrag as unknown as (
+                  event: ReactPointerEvent<HTMLButtonElement>,
+                ) => void
+              }
+              style={clipStyle(text.startUs, text.endUs)}
+              type="button"
+            >
+              {text.text || "空标题"}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    const isVideo = track.kind === "video";
+    const clipKindLabel = isVideo ? "视频" : "音频";
+    return (
+      <div
+        className="timeline__lane"
+        data-track-id={track.id}
+        data-testid={testIdForTrack(track)}
+        key={`${track.id}-lane`}
+      >
+        {orderedClipsForTrack(track.id).map((clip) => {
+          const asset = assetById.get(clip.assetId);
+          return (
+            <div
+              aria-label={`${clipKindLabel}片段 ${asset?.name ?? clip.id}`}
+              aria-selected={selectedClipId === clip.id}
+              className={`timeline__clip timeline__clip--${track.kind}`}
+              data-clip-id={clip.id}
+              key={clip.id}
+              onClick={() => selectMediaClip(clip)}
+              onPointerDown={(event) => beginDrag(event, clip, "move")}
+              onPointerMove={continueDrag}
+              onPointerUp={endDrag}
+              role="button"
+              style={clipStyle(
+                clip.timelineStartUs,
+                clip.timelineStartUs + clipDurationUs(clip),
+              )}
+              tabIndex={0}
+            >
+              <button
+                aria-label={`裁剪 ${clipKindLabel} ${asset?.name ?? clip.id} 开头`}
+                className="timeline__trim timeline__trim--start"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  beginDrag(
+                    event as unknown as ReactPointerEvent<HTMLDivElement>,
+                    clip,
+                    "trim-start",
+                  );
+                }}
+                type="button"
+              />
+              <span>
+                {isVideo ? "▣" : "▥"} {asset?.name ?? clip.id}
+              </span>
+              <button
+                aria-label={`裁剪 ${clipKindLabel} ${asset?.name ?? clip.id} 结尾`}
+                className="timeline__trim timeline__trim--end"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  beginDrag(
+                    event as unknown as ReactPointerEvent<HTMLDivElement>,
+                    clip,
+                    "trim-end",
+                  );
+                }}
+                type="button"
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <section className="timeline" aria-label="时间线" style={timelineStyle}>
@@ -658,156 +860,86 @@ export function Timeline({
         </p>
       ) : null}
 
-      <div className="timeline__ruler">
-        <span>00:00</span>
-        <div className="timeline__ruler-scroll">
-          <input
-            aria-label="时间线播放头"
-            max={durationUs}
-            min={0}
-            onChange={(event) =>
-              onPlayheadChange(Number(event.currentTarget.value))
-            }
-            step={1}
-            style={{ width: `${timelineWidthPx}px` }}
-            type="range"
-            value={Math.min(playheadUs, durationUs)}
-          />
-        </div>
-        <span>{formatTime(durationUs)}</span>
-      </div>
-
-      <div className="timeline__tracks">
-        {orderedTracks.map((track) => {
-          if (track.kind === "text") {
-            const index = trackIndex(track, textTracks);
-            const label = trackLabel(track, index);
-            return (
-              <div className="timeline__track" key={track.id}>
-                {renderTrackHeader(
-                  track,
-                  label,
-                  <span className="timeline__label">{label}</span>,
-                )}
-                <div
-                  className="timeline__lane"
-                  data-track-id={track.id}
-                  data-testid={testIdForTrack(track)}
-                >
-                  {orderedTextsForTrack(track.id).map((text) => (
-                    <button
-                      aria-pressed={selectedTextId === text.id}
-                      className="timeline__clip timeline__clip--text"
-                      key={text.id}
-                      onClick={() => onSelectText(text.id)}
-                      onPointerDown={(event) => beginTextDrag(event, text)}
-                      onPointerMove={
-                        continueDrag as unknown as (
-                          event: ReactPointerEvent<HTMLButtonElement>,
-                        ) => void
-                      }
-                      onPointerUp={
-                        endDrag as unknown as (
-                          event: ReactPointerEvent<HTMLButtonElement>,
-                        ) => void
-                      }
-                      style={clipStyle(text.startUs, text.endUs)}
-                      type="button"
-                    >
-                      {text.text || "空标题"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          }
-
-          const isVideo = track.kind === "video";
-          const index = trackIndex(track, isVideo ? videoTracks : audioTracks);
-          const targetTrackId = isVideo
-            ? targetVideoTrackId
-            : targetAudioTrackId;
-          const onSelectTargetTrack = isVideo
-            ? onSelectTargetVideoTrack
-            : onSelectTargetAudioTrack;
-          const label = trackLabel(track, index);
-          const clipKindLabel = isVideo ? "视频" : "音频";
-
-          return (
-            <div className="timeline__track" key={track.id}>
-              {renderTrackHeader(
+      <div className="timeline__body">
+        <div className="timeline__track-headers">
+          <div className="timeline__ruler-spacer" aria-hidden="true" />
+          {orderedTracks.map((track) => {
+            if (track.kind === "text") {
+              const index = trackIndex(track, textTracks);
+              const label = trackLabel(track, index);
+              return renderTrackHeader(
                 track,
                 label,
-                <button
-                  aria-pressed={targetTrackId === track.id}
-                  className="timeline__label timeline__label--button"
-                  onClick={() => onSelectTargetTrack(track.id)}
-                  type="button"
-                >
-                  {label}
-                </button>,
-              )}
-              <div
-                className="timeline__lane"
-                data-track-id={track.id}
-                data-testid={testIdForTrack(track)}
+                <span className="timeline__label">{label}</span>,
+              );
+            }
+
+            const isVideo = track.kind === "video";
+            const index = trackIndex(
+              track,
+              isVideo ? videoTracks : audioTracks,
+            );
+            const targetTrackId = isVideo
+              ? targetVideoTrackId
+              : targetAudioTrackId;
+            const onSelectTargetTrack = isVideo
+              ? onSelectTargetVideoTrack
+              : onSelectTargetAudioTrack;
+            const label = trackLabel(track, index);
+            return renderTrackHeader(
+              track,
+              label,
+              <button
+                aria-pressed={targetTrackId === track.id}
+                className="timeline__label timeline__label--button"
+                onClick={() => onSelectTargetTrack(track.id)}
+                type="button"
               >
-                {orderedClipsForTrack(track.id).map((clip) => {
-                  const asset = assetById.get(clip.assetId);
-                  return (
-                    <div
-                      aria-label={`${clipKindLabel}片段 ${asset?.name ?? clip.id}`}
-                      aria-selected={selectedClipId === clip.id}
-                      className={`timeline__clip timeline__clip--${track.kind}`}
-                      data-clip-id={clip.id}
-                      key={clip.id}
-                      onClick={() => selectMediaClip(clip)}
-                      onPointerDown={(event) => beginDrag(event, clip, "move")}
-                      onPointerMove={continueDrag}
-                      onPointerUp={endDrag}
-                      role="button"
-                      style={clipStyle(
-                        clip.timelineStartUs,
-                        clip.timelineStartUs + clipDurationUs(clip),
-                      )}
-                      tabIndex={0}
-                    >
-                      <button
-                        aria-label={`裁剪 ${clipKindLabel} ${asset?.name ?? clip.id} 开头`}
-                        className="timeline__trim timeline__trim--start"
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                          beginDrag(
-                            event as unknown as ReactPointerEvent<HTMLDivElement>,
-                            clip,
-                            "trim-start",
-                          );
-                        }}
-                        type="button"
-                      />
-                      <span>
-                        {isVideo ? "▣" : "▥"} {asset?.name ?? clip.id}
-                      </span>
-                      <button
-                        aria-label={`裁剪 ${clipKindLabel} ${asset?.name ?? clip.id} 结尾`}
-                        className="timeline__trim timeline__trim--end"
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                          beginDrag(
-                            event as unknown as ReactPointerEvent<HTMLDivElement>,
-                            clip,
-                            "trim-end",
-                          );
-                        }}
-                        type="button"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+                {label}
+              </button>,
+            );
+          })}
+        </div>
+        <div className="timeline__content-scroll">
+          <div className="timeline__content" data-testid="timeline-content">
+            <div
+              aria-label="时间线刻度尺"
+              className="timeline__ruler"
+              data-duration-us={durationUs}
+              data-pixels-per-second={pixelsPerSecond}
+              data-testid="timeline-ruler"
+              onPointerCancel={endRulerDrag}
+              onPointerDown={beginRulerDrag}
+              onPointerMove={continueRulerDrag}
+              onPointerUp={endRulerDrag}
+            >
+              {rulerTicks.map((tick) => (
+                <span
+                  className={`timeline__ruler-tick timeline__ruler-tick--${tick.kind}${
+                    tick.timeUs === 0
+                      ? " timeline__ruler-tick--first"
+                      : tick.timeUs === durationUs
+                        ? " timeline__ruler-tick--last"
+                        : ""
+                  }`}
+                  key={`${tick.kind}-${tick.timeUs}`}
+                  style={tickStyle(tick.timeUs)}
+                >
+                  {tick.label ? (
+                    <span className="timeline__ruler-label">{tick.label}</span>
+                  ) : null}
+                </span>
+              ))}
             </div>
-          );
-        })}
+            <div
+              aria-hidden="true"
+              className="timeline__playhead-guide"
+              data-testid="timeline-playhead-guide"
+              style={{ left: `${playheadGuideX}px` }}
+            />
+            {orderedTracks.map((track) => renderTrackLane(track))}
+          </div>
+        </div>
       </div>
     </section>
   );

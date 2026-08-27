@@ -42,6 +42,37 @@ async function addTestOneVideo(page: Page) {
   return item;
 }
 
+async function seekTimelineRulerAtUs(page: Page, timeUs: number) {
+  await page.getByTestId("timeline-ruler").evaluate((ruler, timeUs) => {
+    const element = ruler as HTMLElement;
+    const pixelsPerSecond = Number(element.dataset.pixelsPerSecond);
+    const box = element.getBoundingClientRect();
+    const clientX = box.left + (timeUs / 1_000_000) * pixelsPerSecond;
+    const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+    HTMLElement.prototype.setPointerCapture = () => undefined;
+    try {
+      element.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          pointerId: 1,
+        }),
+      );
+      element.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          pointerId: 1,
+        }),
+      );
+    } finally {
+      HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+    }
+  }, timeUs);
+}
+
 async function dragClipBy(page: Page, clipId: string, deltaX: number) {
   await page.evaluate(
     ({ clipId, deltaX }) => {
@@ -458,7 +489,7 @@ test("Task 6: moves a split clip and restores it with Undo/Redo", async ({
   }
 
   await page.locator(`[data-clip-id="${originalClipId}"]`).click();
-  await page.getByRole("slider", { name: "时间线播放头" }).fill("2000000");
+  await seekTimelineRulerAtUs(page, 2_000_000);
   await page.getByRole("button", { name: "播放头分割" }).click();
   await expect(page.locator("[data-clip-id]")).toHaveCount(2);
 
@@ -470,10 +501,9 @@ test("Task 6: moves a split clip and restores it with Undo/Redo", async ({
   if (!rightClip) {
     throw new Error("Expected the right split clip");
   }
-  await expect(page.locator(`[data-clip-id="${rightClip.id}"]`)).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(
+    page.locator(`[data-clip-id="${rightClip.id}"]`),
+  ).toHaveAttribute("aria-selected", "true");
 
   await dragClipBy(page, rightClip.id, 80);
   project = await projectJson(page);
