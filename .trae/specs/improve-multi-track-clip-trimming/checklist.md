@@ -1,0 +1,25 @@
+# Checklist
+
+- [x] 视频轨上的 Clip 可以通过左边缘拖拽裁剪开头，并保持右边界稳定。
+- [x] 视频轨上的 Clip 可以通过右边缘拖拽裁剪结尾，并保持左边界稳定。
+- [x] 音频轨上的 Clip 可以通过左边缘拖拽裁剪开头，并保持右边界稳定。
+- [x] 音频轨上的 Clip 可以通过右边缘拖拽裁剪结尾，并保持左边界稳定。
+- [x] 裁剪不会让 `sourceStartUs >= sourceEndUs`，且不会短于最小片段时长。
+- [x] 裁剪不会让 `sourceStartUs` 小于 0 或 `sourceEndUs` 超过素材 `durationUs`。
+- [x] 裁剪和精确改长不会造成同一轨道内 Clip 时间重叠。
+- [x] 不同视频轨和不同音频轨之间仍允许裁剪后的 Clip 时间重叠。
+- [x] 裁剪受限于素材边界或同轨冲突时，UI 会给出明确提示。
+- [x] 裁剪拖拽通过 Command Bus 提交，并作为单个连续事务参与 Undo/Redo。
+- [x] 属性面板展示选中视频/音频 Clip 的开始时间、素材入点、素材出点和片段时长。
+- [x] 修改片段时长会更新 `sourceEndUs`，并应用素材边界、最小时长和同轨冲突约束。
+- [x] 属性面板非法输入不会把工程写入无效状态。
+- [x] 播放头位于视频 Clip 内部时可以分割，左右 Clip 的源区间和时间线区间正确。
+- [x] 播放头位于音频 Clip 内部时可以分割，左右 Clip 的源区间和时间线区间正确。
+- [x] 分割后的左右 Clip 可以分别选择、拖动、跨同类型轨移动、裁剪和删除。
+- [x] 分割、裁剪、拖动和删除都支持 Undo/Redo 精确恢复。
+- [x] 预览视频帧请求使用裁剪后的 `sourceStartUs/sourceEndUs`，不会渲染被裁掉区间。
+- [x] 音频播放和混音使用裁剪后的 `sourceStartUs/sourceEndUs`，不会播放被裁掉区间。
+- [x] 导出视频和导出音频都使用裁剪后的 Clip 区间，输出与预览语义一致。
+- [x] domain/editor/preview-runtime/media-runtime/export 相关 Vitest 通过。
+- [x] editor typecheck 通过。
+- [x] 相关 Playwright 用例通过，覆盖视频裁剪、音频裁剪、精确改长、分割后拖动和 Undo/Redo。

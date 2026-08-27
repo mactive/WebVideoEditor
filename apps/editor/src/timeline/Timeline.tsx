@@ -15,9 +15,13 @@ import {
 
 import {
   MIN_CLIP_DURATION_US,
+  clampClipSourceEnd,
+  clampClipTrimStart,
   clampClipMove,
   clampTextMove,
   clipDurationUs,
+  type ClipTrimLimit,
+  type ClipTrimResult,
   pixelsToTimeUs,
   projectDurationUs,
   timeUsToPixels,
@@ -109,6 +113,32 @@ function formatTime(timeUs: number): string {
 
 function durationInputValue(durationUs: number): string {
   return String(Math.round(durationUs / 1_000) / 1_000);
+}
+
+function trimLimitNotice(limit: ClipTrimLimit): string | undefined {
+  switch (limit) {
+    case "minimum-duration":
+      return `片段已达到最小时长 ${durationInputValue(MIN_CLIP_DURATION_US)} 秒。`;
+    case "source-boundary":
+      return "裁剪已受素材边界限制。";
+    case "timeline-boundary":
+      return "裁剪已受时间线起点限制。";
+    case "track-conflict":
+      return "裁剪已受同轨相邻片段限制，不能产生重叠。";
+    case "none":
+      return undefined;
+  }
+}
+
+function clipTrimChanged(
+  clip: ProjectDocument["clips"][number],
+  trim: ClipTrimResult,
+): boolean {
+  return (
+    clip.timelineStartUs !== trim.timelineStartUs ||
+    clip.sourceStartUs !== trim.sourceStartUs ||
+    clip.sourceEndUs !== trim.sourceEndUs
+  );
 }
 
 export function Timeline({
@@ -485,50 +515,43 @@ export function Timeline({
       return;
     }
     if (drag.mode === "trim-start") {
-      const maximumDelta =
-        clip.sourceEndUs - clip.sourceStartUs - MIN_CLIP_DURATION_US;
-      const boundedDelta = Math.max(
-        -clip.sourceStartUs,
-        Math.min(maximumDelta, Math.round(deltaUs)),
-      );
+      const trim = clampClipTrimStart(project, clip, deltaUs);
+      updateDragNotice(trimLimitNotice(trim.limit));
+      const currentClip =
+        project.clips.find((candidate) => candidate.id === clip.id) ?? clip;
+      if (!clipTrimChanged(currentClip, trim)) {
+        return;
+      }
       onEdit(
         {
           clipId: clip.id,
-          sourceEndUs: clip.sourceEndUs,
-          sourceStartUs: clip.sourceStartUs + boundedDelta,
-          timelineStartUs: clampClipMove(
-            project,
-            clip.id,
-            clip.timelineStartUs + boundedDelta,
-          ),
+          sourceEndUs: trim.sourceEndUs,
+          sourceStartUs: trim.sourceStartUs,
+          timelineStartUs: trim.timelineStartUs,
           type: "clip.trim",
         },
         drag.transactionId,
       );
       return;
     }
-    const nextClip = project.clips
-      .filter(
-        (candidate) =>
-          candidate.trackId === clip.trackId &&
-          candidate.timelineStartUs > clip.timelineStartUs,
-      )
-      .sort((left, right) => left.timelineStartUs - right.timelineStartUs)[0];
-    const maximumSourceEnd = Math.min(
+    const trim = clampClipSourceEnd(
+      project,
+      clip,
       asset.durationUs,
-      nextClip
-        ? clip.sourceStartUs + nextClip.timelineStartUs - clip.timelineStartUs
-        : asset.durationUs,
+      clip.sourceEndUs + deltaUs,
     );
+    updateDragNotice(trimLimitNotice(trim.limit));
+    const currentClip =
+      project.clips.find((candidate) => candidate.id === clip.id) ?? clip;
+    if (!clipTrimChanged(currentClip, trim)) {
+      return;
+    }
     onEdit(
       {
         clipId: clip.id,
-        sourceEndUs: Math.max(
-          clip.sourceStartUs + MIN_CLIP_DURATION_US,
-          Math.min(maximumSourceEnd, clip.sourceEndUs + Math.round(deltaUs)),
-        ),
-        sourceStartUs: clip.sourceStartUs,
-        timelineStartUs: clip.timelineStartUs,
+        sourceEndUs: trim.sourceEndUs,
+        sourceStartUs: trim.sourceStartUs,
+        timelineStartUs: trim.timelineStartUs,
         type: "clip.trim",
       },
       drag.transactionId,

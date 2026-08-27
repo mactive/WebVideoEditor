@@ -202,8 +202,8 @@
 
 .timeline .timeline__trim {
   align-self: stretch;
-  width: 7px;
-  min-width: 7px;
+  width: 14px;
+  min-width: 14px;
   padding: 0;
   background: #d3d8ff;
   border: 0;

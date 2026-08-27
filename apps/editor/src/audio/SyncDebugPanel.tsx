@@ -30,15 +30,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ActionAvailability } from "../capabilities";
+import {
+  TEST_ASSETS,
+  type TestAssetName,
+} from "../media/testAssets";
 import "./SyncDebugPanel.css";
-
-const TEST_ASSETS = [
-  { name: "test_1.mp4", url: "/test_assets/test_1.mp4" },
-  { name: "test_2.mp4", url: "/test_assets/test_2.mp4" },
-  { name: "test_3.mp4", url: "/test_assets/test_3.mp4" },
-] as const;
-
-type TestAssetName = (typeof TEST_ASSETS)[number]["name"];
 
 type SyncDiagnostics = {
   getAudioStats(): AudioPlaybackStats | undefined;

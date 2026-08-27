@@ -517,12 +517,16 @@ export function App({ initialProject }: AppProps = {}) {
     if (!selectedClipId) {
       return;
     }
-    execute({
+    const rightClipId = `clip-${crypto.randomUUID()}`;
+    const committed = execute({
       clipId: selectedClipId,
-      rightClipId: `clip-${crypto.randomUUID()}`,
+      rightClipId,
       timelineUs: playheadUs,
       type: "clip.split",
     });
+    if (committed) {
+      editorStore.dispatch(clipSelected(rightClipId));
+    }
   };
 
   const deleteSelected = () => {
@@ -632,7 +636,7 @@ export function App({ initialProject }: AppProps = {}) {
       <header className="editor__header">
         <div>
           <p className="eyebrow">WEB VIDEO LAB · TASK 11</p>
-          <h1>总编辑器</h1>
+          <h1>编辑器</h1>
           <p>真实素材 → Command Bus → Redux Project → ECS → PixiJS</p>
         </div>
         <nav>

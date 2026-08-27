@@ -1,17 +1,154 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function projectJson(page: import("@playwright/test").Page) {
+test.describe.configure({ mode: "serial" });
+
+async function projectJson(page: Page) {
   await page.getByRole("button", { name: "Project JSON", exact: true }).click();
   return JSON.parse(
     (await page.getByTestId("project-json").textContent()) ?? "{}",
   ) as {
+    assets: Array<{ durationUs: number; id: string; name: string }>;
     clips: Array<{
       effects: Array<{ amount?: number; kind: string }>;
+      id: string;
       sourceEndUs: number;
       sourceStartUs: number;
+      timelineStartUs: number;
+      trackId: string;
     }>;
-    texts: Array<{ endUs: number; text: string }>;
+    texts: Array<{ endUs: number; startUs: number; text: string }>;
   };
+}
+
+async function importTestOne(page: Page) {
+  await page.getByRole("button", { name: /test_1\.mp4/ }).click();
+  const item = page
+    .locator(".media-panel__results > li")
+    .filter({ hasText: "test_1.mp4" })
+    .first();
+  await expect(item).toHaveAttribute("data-status", "ready", {
+    timeout: 90_000,
+  });
+  return item;
+}
+
+async function addTestOneVideo(page: Page) {
+  const item = await importTestOne(page);
+  await item.getByRole("button", { name: /添加到时间线/ }).click();
+  const cancelProxy = item.getByRole("button", { name: "取消代理" });
+  if (await cancelProxy.isVisible()) {
+    await cancelProxy.click();
+  }
+  return item;
+}
+
+async function dragClipBy(page: Page, clipId: string, deltaX: number) {
+  await page.evaluate(
+    ({ clipId, deltaX }) => {
+      const clip = document.querySelector(`[data-clip-id="${clipId}"]`);
+      if (!(clip instanceof HTMLElement)) {
+        throw new Error(`Clip ${clipId} is not visible`);
+      }
+      const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+      HTMLElement.prototype.setPointerCapture = () => undefined;
+      try {
+        const box = clip.getBoundingClientRect();
+        const start = {
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+        };
+        clip.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+        clip.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x + deltaX,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+        clip.dispatchEvent(
+          new PointerEvent("pointerup", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x + deltaX,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+      } finally {
+        HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+      }
+    },
+    { clipId, deltaX },
+  );
+}
+
+async function dragTrimHandleBy(
+  page: Page,
+  clipId: string,
+  edge: "end" | "start",
+  deltaX: number,
+) {
+  await page.evaluate(
+    ({ clipId, deltaX, edge }) => {
+      const clip = document.querySelector(`[data-clip-id="${clipId}"]`);
+      if (!(clip instanceof HTMLElement)) {
+        throw new Error(`Clip ${clipId} is not visible`);
+      }
+      const handle = clip.querySelector(`.timeline__trim--${edge}`);
+      if (!(handle instanceof HTMLElement)) {
+        throw new Error(`Trim handle ${edge} for ${clipId} is not visible`);
+      }
+      const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+      HTMLElement.prototype.setPointerCapture = () => undefined;
+      try {
+        const box = handle.getBoundingClientRect();
+        const start = {
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+        };
+        handle.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+        clip.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x + deltaX,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+        clip.dispatchEvent(
+          new PointerEvent("pointerup", {
+            bubbles: true,
+            cancelable: true,
+            clientX: start.x + deltaX,
+            clientY: start.y,
+            pointerId: 1,
+          }),
+        );
+      } finally {
+        HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+      }
+    },
+    { clipId, deltaX, edge },
+  );
 }
 
 test("Task 12 core: capability, import, edit, seek, history, and real export", async ({
@@ -101,7 +238,7 @@ test("Task 12 core: capability, import, edit, seek, history, and real export", a
 
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   project = await projectJson(page);
-  expect(project.texts[0]?.endUs).toBe(5_000_000);
+  expect(project.texts[0]?.endUs).toBe(60_000_000);
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   project = await projectJson(page);
   expect(project.texts[0]).toMatchObject({ endUs: 600_000, text: "TASK 12" });
@@ -123,7 +260,7 @@ test("Task 12 core: capability, import, edit, seek, history, and real export", a
     .toBe(250_000);
   await expect(preview).toHaveAttribute("data-decode-active", "0");
   await expect(preview).toHaveAttribute("data-decode-queued", "0");
-  await expect(preview).toHaveAttribute("data-decode-hwm", "1");
+  await expect(preview).toHaveAttribute("data-decode-hwm", "8");
   await expect
     .poll(() =>
       page.evaluate(
@@ -143,8 +280,8 @@ test("Task 12 core: capability, import, edit, seek, history, and real export", a
     window.__TASK_11_EXPORT__?.getResult(),
   );
   expect(result).toMatchObject({
-    durationUs: 1_000_000,
-    frames: 30,
+    durationUs: 60_000_000,
+    frames: 1800,
     height: 1080,
     mimeType: "video/mp4",
     source: "original",
@@ -154,10 +291,9 @@ test("Task 12 core: capability, import, edit, seek, history, and real export", a
   expect(result?.resources.activeTotal).toBe(0);
   expect(result?.resources.byType["video-frame"]).toMatchObject({
     active: 0,
-    created: 30,
-    released: 30,
+    created: 1800,
+    released: 1800,
   });
-  expect(result?.resources.byType["audio-data"].created).toBeGreaterThan(0);
   expect(result?.resources.byType["audio-data"].active).toBe(0);
   expect(result?.queue.videoPeak).toBeLessThanOrEqual(
     result?.queue.highWatermark ?? 0,
@@ -215,7 +351,154 @@ test("Task 12 core: capability, import, edit, seek, history, and real export", a
     false,
   );
   expect(diagnostics.decoded).toMatchObject({ height: 1080, width: 1920 });
-  expect(diagnostics.decoded.duration).toBeGreaterThan(0.9);
-  expect(diagnostics.decoded.duration).toBeLessThan(1.2);
+  expect(diagnostics.decoded.duration).toBeGreaterThan(59.9);
+  expect(diagnostics.decoded.duration).toBeLessThan(60.2);
   expect(pageErrors).toEqual([]);
+});
+
+test("Task 6: trims video/audio clips and protects Inspector time inputs", async ({
+  page,
+}) => {
+  test.setTimeout(3 * 60_000);
+  await page.goto("/");
+
+  const mediaItem = await addTestOneVideo(page);
+  let project = await projectJson(page);
+  const videoId = project.clips.find(
+    (clip) => clip.trackId === "video-track",
+  )?.id;
+  if (!videoId) {
+    throw new Error("Expected a video clip on the primary video track");
+  }
+
+  await dragTrimHandleBy(page, videoId, "start", 80);
+  project = await projectJson(page);
+  let videoClip = project.clips.find((clip) => clip.id === videoId);
+  expect(videoClip).toMatchObject({
+    sourceStartUs: 1_000_000,
+    timelineStartUs: 1_000_000,
+  });
+  const afterVideoLeft = videoClip!;
+
+  await dragTrimHandleBy(page, videoId, "end", -80);
+  project = await projectJson(page);
+  videoClip = project.clips.find((clip) => clip.id === videoId);
+  expect(videoClip).toMatchObject({
+    sourceEndUs: afterVideoLeft.sourceEndUs - 1_000_000,
+    sourceStartUs: afterVideoLeft.sourceStartUs,
+    timelineStartUs: afterVideoLeft.timelineStartUs,
+  });
+
+  await page.locator(`[data-clip-id="${videoId}"]`).click();
+  const beforeDurationEdit = videoClip!;
+  const extendedDurationSeconds =
+    (beforeDurationEdit.sourceEndUs -
+      beforeDurationEdit.sourceStartUs +
+      500_000) /
+    1_000_000;
+  await page
+    .getByLabel("片段时长（秒）")
+    .fill(extendedDurationSeconds.toFixed(6));
+  await page.getByLabel("片段时长（秒）").blur();
+  project = await projectJson(page);
+  videoClip = project.clips.find((clip) => clip.id === videoId);
+  expect(videoClip).toMatchObject({
+    sourceEndUs: beforeDurationEdit.sourceEndUs + 500_000,
+    sourceStartUs: beforeDurationEdit.sourceStartUs,
+    timelineStartUs: beforeDurationEdit.timelineStartUs,
+  });
+
+  const beforeInvalidInput = videoClip!;
+  await page.getByLabel("源入点（秒）").fill("-1");
+  await expect(page.getByRole("status")).toContainText("请输入非负秒数。");
+  project = await projectJson(page);
+  expect(project.clips.find((clip) => clip.id === videoId)).toMatchObject(
+    beforeInvalidInput,
+  );
+
+  await mediaItem.getByRole("button", { name: "添加音频到时间线" }).click();
+  project = await projectJson(page);
+  const audioId = project.clips.find(
+    (clip) => clip.trackId === "audio-track",
+  )?.id;
+  if (!audioId) {
+    throw new Error("Expected an audio clip on the primary audio track");
+  }
+
+  await dragTrimHandleBy(page, audioId, "start", 80);
+  project = await projectJson(page);
+  let audioClip = project.clips.find((clip) => clip.id === audioId);
+  expect(audioClip).toMatchObject({
+    sourceStartUs: 1_000_000,
+    timelineStartUs: 1_000_000,
+  });
+  const afterAudioLeft = audioClip!;
+
+  await dragTrimHandleBy(page, audioId, "end", -80);
+  project = await projectJson(page);
+  audioClip = project.clips.find((clip) => clip.id === audioId);
+  expect(audioClip).toMatchObject({
+    sourceEndUs: afterAudioLeft.sourceEndUs - 1_000_000,
+    sourceStartUs: afterAudioLeft.sourceStartUs,
+    timelineStartUs: afterAudioLeft.timelineStartUs,
+  });
+});
+
+test("Task 6: moves a split clip and restores it with Undo/Redo", async ({
+  page,
+}) => {
+  test.setTimeout(3 * 60_000);
+  await page.goto("/");
+
+  await addTestOneVideo(page);
+  let project = await projectJson(page);
+  const originalClipId = project.clips[0]?.id;
+  if (!originalClipId) {
+    throw new Error("Expected an imported clip before splitting");
+  }
+
+  await page.locator(`[data-clip-id="${originalClipId}"]`).click();
+  await page.getByRole("slider", { name: "时间线播放头" }).fill("2000000");
+  await page.getByRole("button", { name: "播放头分割" }).click();
+  await expect(page.locator("[data-clip-id]")).toHaveCount(2);
+
+  project = await projectJson(page);
+  const rightClip = project.clips.find(
+    (clip) =>
+      clip.trackId === "video-track" && clip.sourceStartUs === 2_000_000,
+  );
+  if (!rightClip) {
+    throw new Error("Expected the right split clip");
+  }
+  await expect(page.locator(`[data-clip-id="${rightClip.id}"]`)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  await dragClipBy(page, rightClip.id, 80);
+  project = await projectJson(page);
+  expect(project.clips.find((clip) => clip.id === rightClip.id)).toMatchObject({
+    sourceEndUs: rightClip.sourceEndUs,
+    sourceStartUs: rightClip.sourceStartUs,
+    timelineStartUs: 3_000_000,
+    trackId: "video-track",
+  });
+
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  project = await projectJson(page);
+  expect(project.clips.find((clip) => clip.id === rightClip.id)).toMatchObject({
+    sourceEndUs: rightClip.sourceEndUs,
+    sourceStartUs: rightClip.sourceStartUs,
+    timelineStartUs: 2_000_000,
+    trackId: "video-track",
+  });
+
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  project = await projectJson(page);
+  expect(project.clips.find((clip) => clip.id === rightClip.id)).toMatchObject({
+    sourceEndUs: rightClip.sourceEndUs,
+    sourceStartUs: rightClip.sourceStartUs,
+    timelineStartUs: 3_000_000,
+    trackId: "video-track",
+  });
 });

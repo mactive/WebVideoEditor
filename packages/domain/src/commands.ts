@@ -6,7 +6,11 @@ import type {
   TextItem,
   Track,
 } from "./schema";
-import { projectContentEndUs } from "./project";
+import {
+  clipDurationUs,
+  MIN_CLIP_DURATION_US,
+  projectContentEndUs,
+} from "./project";
 import { cloneProjectDocument } from "./serialization";
 import { ProjectValidationError, validateProjectDocument } from "./validation";
 
@@ -226,6 +230,14 @@ function createMediaTrack(
   };
 }
 
+function cloneClipEffects(effects: readonly Effect[]): Effect[] {
+  return effects.map((effect) => ({ ...effect }));
+}
+
+function cloneClipTransform(transform: Clip["transform"]): Clip["transform"] {
+  return transform ? { ...transform } : undefined;
+}
+
 function applyUnchecked(
   project: ProjectDocument,
   command: ProjectCommand,
@@ -365,12 +377,22 @@ function applyUnchecked(
         break;
       }
       const offsetUs = command.timelineUs - clip.timelineStartUs;
-      const durationUs = clip.sourceEndUs - clip.sourceStartUs;
+      const durationUs = clipDurationUs(clip);
       if (offsetUs <= 0 || offsetUs >= durationUs) {
         throw new Error("分割时间必须位于片段内部");
       }
       const originalSourceEndUs = clip.sourceEndUs;
       const splitSourceUs = clip.sourceStartUs + offsetUs;
+      const leftDurationUs = splitSourceUs - clip.sourceStartUs;
+      const rightDurationUs = originalSourceEndUs - splitSourceUs;
+      if (
+        leftDurationUs < MIN_CLIP_DURATION_US ||
+        rightDurationUs < MIN_CLIP_DURATION_US
+      ) {
+        throw new Error(
+          `分割后的片段时长不能短于 ${MIN_CLIP_DURATION_US} 微秒`,
+        );
+      }
       clip.sourceEndUs = splitSourceUs;
       project.clips.splice(index + 1, 0, {
         ...clip,
@@ -378,7 +400,10 @@ function applyUnchecked(
         timelineStartUs: command.timelineUs,
         sourceStartUs: splitSourceUs,
         sourceEndUs: originalSourceEndUs,
-        effects: clip.effects.map((effect) => ({ ...effect })),
+        effects: cloneClipEffects(clip.effects),
+        ...(clip.transform
+          ? { transform: cloneClipTransform(clip.transform) }
+          : {}),
       });
       break;
     }

@@ -1083,6 +1083,193 @@ describe("editor interactions", () => {
     }
   });
 
+  it("trims video and audio clips with visible handles", () => {
+    const project = projectFixture();
+    project.clips.push({
+      assetId: "asset",
+      effects: [],
+      id: "audio-1",
+      sourceEndUs: 5_000_000,
+      sourceStartUs: 0,
+      timelineStartUs: 0,
+      trackId: "audio-track",
+    });
+    const onEdit = vi.fn();
+    const restorePointerCapture = mockPointerCapture();
+
+    try {
+      render(
+        <Timeline
+          canRedo={false}
+          canUndo={false}
+          onAddAudioTrack={vi.fn()}
+          onAddTitle={vi.fn()}
+          onAddVideoTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onDeleteTrack={vi.fn()}
+          onEdit={onEdit}
+          onPlayheadChange={vi.fn()}
+          onRedo={vi.fn()}
+          onReorderTracks={vi.fn()}
+          onSelectClip={vi.fn()}
+          onSelectTargetAudioTrack={vi.fn()}
+          onSelectTargetVideoTrack={vi.fn()}
+          onSelectText={vi.fn()}
+          onTimelineDurationChange={vi.fn()}
+          onSplit={vi.fn()}
+          onUndo={vi.fn()}
+          playheadUs={0}
+          project={project}
+          selectedClipId={null}
+          selectedTextId={null}
+          targetAudioTrackId="audio-track"
+          targetVideoTrackId="video-track"
+        />,
+      );
+
+      fireEvent.change(screen.getByRole("slider", { name: "时间线缩放" }), {
+        target: { value: "160" },
+      });
+      const videoClip = screen.getByRole("button", {
+        name: "视频片段 test.mp4",
+      });
+      const videoTrimStart = screen.getByLabelText("裁剪 视频 test.mp4 开头");
+      firePointerEvent(videoTrimStart, "pointerdown", {
+        clientX: 0,
+        pointerId: 1,
+      });
+      firePointerEvent(videoClip, "pointermove", {
+        clientX: 160,
+        pointerId: 1,
+      });
+      firePointerEvent(videoClip, "pointermove", {
+        clientX: 320,
+        pointerId: 1,
+      });
+
+      expect(onEdit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          clipId: "clip",
+          sourceEndUs: 5_000_000,
+          sourceStartUs: 2_000_000,
+          timelineStartUs: 2_000_000,
+          type: "clip.trim",
+        }),
+        expect.any(String),
+      );
+      expect(onEdit.mock.calls[0]?.[1]).toBe(onEdit.mock.calls[1]?.[1]);
+
+      const audioClip = screen.getByRole("button", {
+        name: "音频片段 test.mp4",
+      });
+      const audioTrimEnd = screen.getByLabelText("裁剪 音频 test.mp4 结尾");
+      firePointerEvent(audioTrimEnd, "pointerdown", {
+        clientX: 0,
+        pointerId: 2,
+      });
+      firePointerEvent(audioClip, "pointermove", {
+        clientX: -160,
+        pointerId: 2,
+      });
+
+      expect(onEdit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          clipId: "audio-1",
+          sourceEndUs: 4_000_000,
+          sourceStartUs: 0,
+          timelineStartUs: 0,
+          type: "clip.trim",
+        }),
+        expect.any(String),
+      );
+    } finally {
+      restorePointerCapture();
+    }
+  });
+
+  it("clamps trim drags at same-track conflicts and shows the reason", () => {
+    const project = projectFixture();
+    project.clips = [
+      {
+        assetId: "asset",
+        effects: [],
+        id: "clip-1",
+        sourceEndUs: 2_000_000,
+        sourceStartUs: 0,
+        timelineStartUs: 0,
+        trackId: "video-track",
+      },
+      {
+        assetId: "asset",
+        effects: [],
+        id: "clip-2",
+        sourceEndUs: 2_000_000,
+        sourceStartUs: 0,
+        timelineStartUs: 3_000_000,
+        trackId: "video-track",
+      },
+    ];
+    const onEdit = vi.fn();
+    const restorePointerCapture = mockPointerCapture();
+
+    try {
+      render(
+        <Timeline
+          canRedo={false}
+          canUndo={false}
+          onAddAudioTrack={vi.fn()}
+          onAddTitle={vi.fn()}
+          onAddVideoTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onDeleteTrack={vi.fn()}
+          onEdit={onEdit}
+          onPlayheadChange={vi.fn()}
+          onRedo={vi.fn()}
+          onReorderTracks={vi.fn()}
+          onSelectClip={vi.fn()}
+          onSelectTargetAudioTrack={vi.fn()}
+          onSelectTargetVideoTrack={vi.fn()}
+          onSelectText={vi.fn()}
+          onTimelineDurationChange={vi.fn()}
+          onSplit={vi.fn()}
+          onUndo={vi.fn()}
+          playheadUs={0}
+          project={project}
+          selectedClipId={null}
+          selectedTextId={null}
+          targetAudioTrackId="audio-track"
+          targetVideoTrackId="video-track"
+        />,
+      );
+
+      const firstClip = screen.getAllByRole("button", {
+        name: "视频片段 test.mp4",
+      })[0]!;
+      firePointerEvent(screen.getAllByLabelText("裁剪 视频 test.mp4 结尾")[0]!, "pointerdown", {
+        clientX: 0,
+        pointerId: 1,
+      });
+      firePointerEvent(firstClip, "pointermove", {
+        clientX: 200,
+        pointerId: 1,
+      });
+
+      expect(onEdit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clipId: "clip-1",
+          sourceEndUs: 3_000_000,
+          type: "clip.trim",
+        }),
+        expect.any(String),
+      );
+      expect(screen.getByRole("status").textContent).toContain(
+        "同轨相邻片段",
+      );
+    } finally {
+      restorePointerCapture();
+    }
+  });
+
   it("rejects dragging media clips to a different track kind", () => {
     const onEdit = vi.fn();
     const restorePointerCapture = mockPointerCapture();
@@ -1477,6 +1664,163 @@ describe("editor interactions", () => {
           expect.objectContaining({
             timelineStartUs: 1_000_000,
             trackId: "video-track-2",
+          }),
+        );
+      });
+    } finally {
+      restorePointerCapture();
+    }
+  });
+
+  it("selects and moves the right clip after splitting a video clip", async () => {
+    const project = addEmptySecondVideoTrack(projectFixture());
+    const restorePointerCapture = mockPointerCapture();
+    const { container } = render(<App initialProject={project} />);
+
+    try {
+      fireEvent.change(screen.getByRole("slider", { name: "时间线播放头" }), {
+        target: { value: "2000000" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "视频片段 test.mp4" }));
+      fireEvent.click(screen.getByRole("button", { name: "播放头分割" }));
+      fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
+
+      let rightClipId = "";
+      await waitFor(() => {
+        const split = JSON.parse(
+          screen.getByTestId("project-json").textContent ?? "{}",
+        ) as ProjectDocument;
+        const rightClip = split.clips.find(
+          (clip) =>
+            clip.trackId === "video-track" && clip.sourceStartUs === 2_000_000,
+        );
+        expect(rightClip).toBeTruthy();
+        rightClipId = rightClip?.id ?? "";
+        expect(
+          container
+            .querySelector(`[data-clip-id="${rightClipId}"]`)
+            ?.getAttribute("aria-selected"),
+        ).toBe("true");
+      });
+
+      setLaneRect("video-track-video-track", 0, 42);
+      setLaneRect("video-track-video-track-2", 50, 92);
+      const rightClipElement = container.querySelector(
+        `[data-clip-id="${rightClipId}"]`,
+      );
+      expect(rightClipElement).toBeTruthy();
+      firePointerEvent(rightClipElement!, "pointerdown", {
+        clientX: 0,
+        clientY: 10,
+        pointerId: 1,
+      });
+      firePointerEvent(rightClipElement!, "pointermove", {
+        clientX: 80,
+        clientY: 60,
+        pointerId: 1,
+      });
+
+      await waitFor(() => {
+        const moved = JSON.parse(
+          screen.getByTestId("project-json").textContent ?? "{}",
+        ) as ProjectDocument;
+        expect(moved.clips.find((clip) => clip.id === rightClipId)).toEqual(
+          expect.objectContaining({
+            timelineStartUs: 3_000_000,
+            trackId: "video-track-2",
+          }),
+        );
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+      await waitFor(() => {
+        const undone = JSON.parse(
+          screen.getByTestId("project-json").textContent ?? "{}",
+        ) as ProjectDocument;
+        expect(undone.clips.find((clip) => clip.id === rightClipId)).toEqual(
+          expect.objectContaining({
+            timelineStartUs: 2_000_000,
+            trackId: "video-track",
+          }),
+        );
+      });
+    } finally {
+      restorePointerCapture();
+    }
+  });
+
+  it("trims the right audio clip after splitting and supports undo", async () => {
+    const project = projectFixture();
+    project.clips.push({
+      assetId: "asset",
+      effects: [],
+      id: "audio-1",
+      sourceEndUs: 5_000_000,
+      sourceStartUs: 0,
+      timelineStartUs: 0,
+      trackId: "audio-track",
+    });
+    const restorePointerCapture = mockPointerCapture();
+    const { container } = render(<App initialProject={project} />);
+
+    try {
+      fireEvent.change(screen.getByRole("slider", { name: "时间线播放头" }), {
+        target: { value: "2000000" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "音频片段 test.mp4" }));
+      fireEvent.click(screen.getByRole("button", { name: "播放头分割" }));
+      fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
+
+      let rightClipId = "";
+      await waitFor(() => {
+        const split = JSON.parse(
+          screen.getByTestId("project-json").textContent ?? "{}",
+        ) as ProjectDocument;
+        const rightClip = split.clips.find(
+          (clip) =>
+            clip.trackId === "audio-track" && clip.sourceStartUs === 2_000_000,
+        );
+        expect(rightClip).toBeTruthy();
+        rightClipId = rightClip?.id ?? "";
+      });
+
+      const rightClipElement = container.querySelector(
+        `[data-clip-id="${rightClipId}"]`,
+      );
+      const trimEnd = rightClipElement?.querySelector(".timeline__trim--end");
+      expect(trimEnd).toBeTruthy();
+      firePointerEvent(trimEnd!, "pointerdown", {
+        clientX: 0,
+        pointerId: 1,
+      });
+      firePointerEvent(rightClipElement!, "pointermove", {
+        clientX: -80,
+        pointerId: 1,
+      });
+
+      await waitFor(() => {
+        const trimmed = JSON.parse(
+          screen.getByTestId("project-json").textContent ?? "{}",
+        ) as ProjectDocument;
+        expect(trimmed.clips.find((clip) => clip.id === rightClipId)).toEqual(
+          expect.objectContaining({
+            sourceEndUs: 4_000_000,
+            sourceStartUs: 2_000_000,
+          }),
+        );
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+      await waitFor(() => {
+        const undone = JSON.parse(
+          screen.getByTestId("project-json").textContent ?? "{}",
+        ) as ProjectDocument;
+        expect(undone.clips.find((clip) => clip.id === rightClipId)).toEqual(
+          expect.objectContaining({
+            sourceEndUs: 5_000_000,
+            sourceStartUs: 2_000_000,
           }),
         );
       });

@@ -10,6 +10,20 @@ export function clipDurationUs(clip: ProjectDocument["clips"][number]): number {
   return clip.sourceEndUs - clip.sourceStartUs;
 }
 
+export type ClipTrimLimit =
+  | "minimum-duration"
+  | "none"
+  | "source-boundary"
+  | "timeline-boundary"
+  | "track-conflict";
+
+export type ClipTrimResult = {
+  limit: ClipTrimLimit;
+  sourceEndUs: number;
+  sourceStartUs: number;
+  timelineStartUs: number;
+};
+
 export function projectDurationUs(project: ProjectDocument): number {
   return Math.max(
     MIN_TIMELINE_DISPLAY_DURATION_US,
@@ -30,6 +44,10 @@ export function timeUsToPixels(
   pixelsPerSecond: number,
 ): number {
   return (timeUs / 1_000_000) * pixelsPerSecond;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
 }
 
 function clampStartBetweenSpans(
@@ -144,4 +162,144 @@ export function clampTextMove(
     targetText.endUs - targetText.startUs,
     proposedStartUs,
   );
+}
+
+function sameTrackClipsExcept(
+  project: ProjectDocument,
+  clip: ProjectDocument["clips"][number],
+): ProjectDocument["clips"] {
+  return project.clips
+    .filter(
+      (candidate) =>
+        candidate.trackId === clip.trackId && candidate.id !== clip.id,
+    )
+    .sort((left, right) => left.timelineStartUs - right.timelineStartUs);
+}
+
+function previousClipEndUs(
+  project: ProjectDocument,
+  clip: ProjectDocument["clips"][number],
+): number {
+  const previous = sameTrackClipsExcept(project, clip)
+    .filter((candidate) => candidate.timelineStartUs < clip.timelineStartUs)
+    .at(-1);
+  return previous ? previous.timelineStartUs + clipDurationUs(previous) : 0;
+}
+
+function nextClipStartUs(
+  project: ProjectDocument,
+  clip: ProjectDocument["clips"][number],
+): number | undefined {
+  return sameTrackClipsExcept(project, clip).find(
+    (candidate) => candidate.timelineStartUs > clip.timelineStartUs,
+  )?.timelineStartUs;
+}
+
+export function clampClipTrimStart(
+  project: ProjectDocument,
+  clip: ProjectDocument["clips"][number],
+  proposedDeltaUs: number,
+): ClipTrimResult {
+  const roundedDeltaUs = Math.round(proposedDeltaUs);
+  const previousEndUs = previousClipEndUs(project, clip);
+  const minimumDeltaUs = Math.max(
+    -clip.sourceStartUs,
+    -clip.timelineStartUs,
+    previousEndUs - clip.timelineStartUs,
+  );
+  const maximumDeltaUs = clipDurationUs(clip) - MIN_CLIP_DURATION_US;
+  const deltaUs = clamp(roundedDeltaUs, minimumDeltaUs, maximumDeltaUs);
+  let limit: ClipTrimLimit = "none";
+
+  if (deltaUs > roundedDeltaUs) {
+    limit =
+      previousEndUs > 0 && deltaUs === previousEndUs - clip.timelineStartUs
+        ? "track-conflict"
+        : deltaUs === -clip.timelineStartUs
+          ? "timeline-boundary"
+          : "source-boundary";
+  } else if (deltaUs < roundedDeltaUs) {
+    limit = "minimum-duration";
+  }
+
+  return {
+    limit,
+    sourceEndUs: clip.sourceEndUs,
+    sourceStartUs: clip.sourceStartUs + deltaUs,
+    timelineStartUs: clip.timelineStartUs + deltaUs,
+  };
+}
+
+export function clampClipSourceEnd(
+  project: ProjectDocument,
+  clip: ProjectDocument["clips"][number],
+  assetDurationUs: number,
+  proposedSourceEndUs: number,
+): ClipTrimResult {
+  const roundedSourceEndUs = Math.round(proposedSourceEndUs);
+  const nextStartUs = nextClipStartUs(project, clip);
+  const maximumByTrackUs =
+    nextStartUs === undefined
+      ? Number.MAX_SAFE_INTEGER
+      : clip.sourceStartUs + nextStartUs - clip.timelineStartUs;
+  const minimumSourceEndUs = clip.sourceStartUs + MIN_CLIP_DURATION_US;
+  const maximumSourceEndUs = Math.min(assetDurationUs, maximumByTrackUs);
+  const sourceEndUs = clamp(
+    roundedSourceEndUs,
+    minimumSourceEndUs,
+    maximumSourceEndUs,
+  );
+  let limit: ClipTrimLimit = "none";
+
+  if (sourceEndUs > roundedSourceEndUs) {
+    limit = "minimum-duration";
+  } else if (sourceEndUs < roundedSourceEndUs) {
+    limit =
+      maximumByTrackUs < assetDurationUs ? "track-conflict" : "source-boundary";
+  }
+
+  return {
+    limit,
+    sourceEndUs,
+    sourceStartUs: clip.sourceStartUs,
+    timelineStartUs: clip.timelineStartUs,
+  };
+}
+
+export function clampClipSourceStart(
+  project: ProjectDocument,
+  clip: ProjectDocument["clips"][number],
+  proposedSourceStartUs: number,
+): ClipTrimResult {
+  const roundedSourceStartUs = Math.round(proposedSourceStartUs);
+  const nextStartUs = nextClipStartUs(project, clip);
+  const maximumDurationUs =
+    nextStartUs === undefined
+      ? Number.MAX_SAFE_INTEGER
+      : nextStartUs - clip.timelineStartUs;
+  const minimumSourceStartUs = Math.max(
+    0,
+    clip.sourceEndUs - maximumDurationUs,
+  );
+  const maximumSourceStartUs = clip.sourceEndUs - MIN_CLIP_DURATION_US;
+  const sourceStartUs = clamp(
+    roundedSourceStartUs,
+    minimumSourceStartUs,
+    maximumSourceStartUs,
+  );
+  let limit: ClipTrimLimit = "none";
+
+  if (sourceStartUs < roundedSourceStartUs) {
+    limit = "minimum-duration";
+  } else if (sourceStartUs > roundedSourceStartUs) {
+    limit =
+      minimumSourceStartUs > 0 ? "track-conflict" : "source-boundary";
+  }
+
+  return {
+    limit,
+    sourceEndUs: clip.sourceEndUs,
+    sourceStartUs,
+    timelineStartUs: clip.timelineStartUs,
+  };
 }

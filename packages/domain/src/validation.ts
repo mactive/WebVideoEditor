@@ -1,5 +1,9 @@
 import { type ProjectDocument, projectDocumentSchema } from "./schema";
-import { projectContentEndUs } from "./project";
+import {
+  clipDurationUs,
+  MIN_CLIP_DURATION_US,
+  projectContentEndUs,
+} from "./project";
 
 export type ProjectValidationIssue = {
   code:
@@ -119,6 +123,16 @@ export function validateProjectInvariants(
         code: "invalid_boundary",
         path,
         message: "sourceStartUs 必须小于 sourceEndUs",
+      });
+    }
+    if (
+      clip.sourceStartUs < clip.sourceEndUs &&
+      clipDurationUs(clip) < MIN_CLIP_DURATION_US
+    ) {
+      issues.push({
+        code: "invalid_boundary",
+        path,
+        message: `片段时长不能短于 ${MIN_CLIP_DURATION_US} 微秒`,
       });
     }
     if (asset && clip.sourceEndUs > asset.durationUs) {

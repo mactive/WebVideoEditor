@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { CommandBus, type CommandEvent } from "./command-bus";
 import { applyProjectCommand, type ProjectCommand } from "./commands";
-import { createProjectDocument } from "./project";
+import { createProjectDocument, MIN_CLIP_DURATION_US } from "./project";
 import { createTestProject } from "./test-fixture";
 
 const now = "2026-08-09T01:00:00.000Z";
@@ -19,6 +19,26 @@ function addTrack(
     order: project.tracks.length,
     muted: false,
     locked: false,
+  });
+}
+
+function addAudioClip(
+  project: ReturnType<typeof createTestProject>,
+  overrides: Partial<ReturnType<typeof createTestProject>["clips"][number]> = {},
+): void {
+  const trackId = overrides.trackId ?? "audio-1";
+  if (!project.tracks.some((track) => track.id === trackId)) {
+    addTrack(project, trackId, "audio");
+  }
+  project.clips.push({
+    id: "audio-clip-1",
+    assetId: "asset-1",
+    trackId,
+    timelineStartUs: 0,
+    sourceStartUs: 0,
+    sourceEndUs: 5_000_000,
+    effects: [],
+    ...overrides,
   });
 }
 
@@ -356,6 +376,350 @@ describe("project commands", () => {
     );
 
     expect(result.timeline.durationUs).toBe(15_000_000);
+  });
+
+  it("trims a video clip start while keeping its timeline right edge stable", () => {
+    const project = createTestProject();
+    const rightEdgeUs =
+      project.clips[0]!.timelineStartUs +
+      project.clips[0]!.sourceEndUs -
+      project.clips[0]!.sourceStartUs;
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.trim",
+        clipId: "clip-1",
+        timelineStartUs: 2_000_000,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 5_000_000,
+      },
+      now,
+    );
+    const clip = result.clips[0]!;
+
+    expect(clip).toEqual(
+      expect.objectContaining({
+        timelineStartUs: 2_000_000,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 5_000_000,
+      }),
+    );
+    expect(clip.timelineStartUs + clip.sourceEndUs - clip.sourceStartUs).toBe(
+      rightEdgeUs,
+    );
+  });
+
+  it("extends a video clip up to the next same-track clip boundary", () => {
+    const result = applyProjectCommand(
+      createTestProject(),
+      {
+        type: "clip.trim",
+        clipId: "clip-1",
+        timelineStartUs: 0,
+        sourceStartUs: 0,
+        sourceEndUs: 6_000_000,
+      },
+      now,
+    );
+
+    expect(result.clips[0]).toEqual(
+      expect.objectContaining({
+        timelineStartUs: 0,
+        sourceStartUs: 0,
+        sourceEndUs: 6_000_000,
+      }),
+    );
+  });
+
+  it("trims an audio clip with the same source and timeline semantics", () => {
+    const project = createTestProject();
+    addAudioClip(project);
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.trim",
+        clipId: "audio-clip-1",
+        timelineStartUs: 2_000_000,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 7_000_000,
+      },
+      now,
+    );
+
+    expect(result.clips.find((clip) => clip.id === "audio-clip-1")).toEqual(
+      expect.objectContaining({
+        trackId: "audio-1",
+        timelineStartUs: 2_000_000,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 7_000_000,
+      }),
+    );
+  });
+
+  it.each([
+    {
+      name: "empty source range",
+      command: {
+        type: "clip.trim" as const,
+        clipId: "clip-1",
+        timelineStartUs: 0,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 2_000_000,
+      },
+      message: "sourceStartUs 必须小于 sourceEndUs",
+    },
+    {
+      name: "shorter than minimum duration",
+      command: {
+        type: "clip.trim" as const,
+        clipId: "clip-1",
+        timelineStartUs: 0,
+        sourceStartUs: 0,
+        sourceEndUs: MIN_CLIP_DURATION_US - 1,
+      },
+      message: "片段时长不能短于",
+    },
+    {
+      name: "past asset duration",
+      command: {
+        type: "clip.trim" as const,
+        clipId: "clip-1",
+        timelineStartUs: 0,
+        sourceStartUs: 19_000_000,
+        sourceEndUs: 21_000_000,
+      },
+      message: "片段源结束时间超出素材时长",
+    },
+  ])("rejects invalid clip.trim boundaries: $name", ({ command, message }) => {
+    const project = createTestProject();
+
+    expect(() => applyProjectCommand(project, command, now)).toThrow(message);
+    expect(project).toEqual(createTestProject());
+  });
+
+  it("rejects trimming into another clip on the same track", () => {
+    const project = createTestProject();
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        {
+          type: "clip.trim",
+          clipId: "clip-1",
+          timelineStartUs: 0,
+          sourceStartUs: 0,
+          sourceEndUs: 6_000_001,
+        },
+        now,
+      ),
+    ).toThrow("重叠");
+    expect(project).toEqual(createTestProject());
+  });
+
+  it("allows trimming to overlap clips on a different video track", () => {
+    const project = createTestProject();
+    project.clips = [project.clips[0]!];
+    addTrack(project, "video-2", "video");
+    project.clips.push({
+      id: "clip-on-video-2",
+      assetId: "asset-1",
+      trackId: "video-2",
+      timelineStartUs: 2_000_000,
+      sourceStartUs: 0,
+      sourceEndUs: 5_000_000,
+      effects: [],
+    });
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.trim",
+        clipId: "clip-1",
+        timelineStartUs: 0,
+        sourceStartUs: 0,
+        sourceEndUs: 8_000_000,
+      },
+      now,
+    );
+
+    expect(result.clips.find((clip) => clip.id === "clip-1")).toEqual(
+      expect.objectContaining({ sourceEndUs: 8_000_000 }),
+    );
+  });
+
+  it("splits a clip without sharing mutable effect or transform references", () => {
+    const project = createTestProject();
+    project.clips[0]!.effects = [
+      {
+        id: "effect-1",
+        kind: "adjustments",
+        enabled: true,
+        brightness: 0.1,
+        contrast: 0.2,
+      },
+    ];
+    project.clips[0]!.transform = {
+      rotationDeg: 12,
+      scale: 0.8,
+      x: 0.4,
+      y: 0.6,
+    };
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.split",
+        clipId: "clip-1",
+        rightClipId: "clip-right",
+        timelineUs: 2_000_000,
+      },
+      now,
+    );
+    const left = result.clips.find((clip) => clip.id === "clip-1")!;
+    const right = result.clips.find((clip) => clip.id === "clip-right")!;
+
+    expect(left).toEqual(
+      expect.objectContaining({
+        assetId: "asset-1",
+        trackId: "video-1",
+        timelineStartUs: 0,
+        sourceStartUs: 0,
+        sourceEndUs: 2_000_000,
+      }),
+    );
+    expect(right).toEqual(
+      expect.objectContaining({
+        assetId: "asset-1",
+        trackId: "video-1",
+        timelineStartUs: 2_000_000,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 5_000_000,
+        effects: left.effects,
+        transform: left.transform,
+      }),
+    );
+    expect(right.effects).not.toBe(left.effects);
+    expect(right.effects[0]).not.toBe(left.effects[0]);
+    expect(right.transform).not.toBe(left.transform);
+  });
+
+  it("splits an audio clip using the same timeline-to-source mapping", () => {
+    const project = createTestProject();
+    addAudioClip(project, {
+      timelineStartUs: 4_000_000,
+      sourceStartUs: 2_000_000,
+      sourceEndUs: 7_000_000,
+    });
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.split",
+        clipId: "audio-clip-1",
+        rightClipId: "audio-clip-right",
+        timelineUs: 5_500_000,
+      },
+      now,
+    );
+
+    expect(result.clips.find((clip) => clip.id === "audio-clip-1")).toEqual(
+      expect.objectContaining({
+        assetId: "asset-1",
+        trackId: "audio-1",
+        timelineStartUs: 4_000_000,
+        sourceStartUs: 2_000_000,
+        sourceEndUs: 3_500_000,
+      }),
+    );
+    expect(result.clips.find((clip) => clip.id === "audio-clip-right")).toEqual(
+      expect.objectContaining({
+        assetId: "asset-1",
+        trackId: "audio-1",
+        timelineStartUs: 5_500_000,
+        sourceStartUs: 3_500_000,
+        sourceEndUs: 7_000_000,
+      }),
+    );
+  });
+
+  it("rejects splits that would create clips shorter than the minimum duration", () => {
+    const project = createTestProject();
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        {
+          type: "clip.split",
+          clipId: "clip-1",
+          rightClipId: "clip-right",
+          timelineUs: MIN_CLIP_DURATION_US - 1,
+        },
+        now,
+      ),
+    ).toThrow("分割后的片段时长不能短于");
+    expect(project).toEqual(createTestProject());
+  });
+
+  it("moves audio clips across same-kind tracks", () => {
+    const project = createTestProject();
+    addAudioClip(project);
+    addTrack(project, "audio-2", "audio");
+    project.clips.push({
+      id: "audio-clip-2",
+      assetId: "asset-1",
+      trackId: "audio-2",
+      timelineStartUs: 2_000_000,
+      sourceStartUs: 5_000_000,
+      sourceEndUs: 10_000_000,
+      effects: [],
+    });
+
+    const result = applyProjectCommand(
+      project,
+      {
+        type: "clip.move",
+        clipId: "audio-clip-1",
+        trackId: "audio-2",
+        timelineStartUs: 8_000_000,
+      },
+      now,
+    );
+
+    expect(result.clips.find((clip) => clip.id === "audio-clip-1")).toEqual(
+      expect.objectContaining({
+        trackId: "audio-2",
+        timelineStartUs: 8_000_000,
+      }),
+    );
+  });
+
+  it("rejects moving audio clips into a same-track conflict", () => {
+    const project = createTestProject();
+    addAudioClip(project);
+    project.clips.push({
+      id: "audio-clip-2",
+      assetId: "asset-1",
+      trackId: "audio-1",
+      timelineStartUs: 6_000_000,
+      sourceStartUs: 5_000_000,
+      sourceEndUs: 10_000_000,
+      effects: [],
+    });
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        {
+          type: "clip.move",
+          clipId: "audio-clip-2",
+          trackId: "audio-1",
+          timelineStartUs: 4_000_000,
+        },
+        now,
+      ),
+    ).toThrow("重叠");
   });
 
   it("normalizes track order after reordering", () => {

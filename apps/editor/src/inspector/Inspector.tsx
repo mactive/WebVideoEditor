@@ -3,7 +3,17 @@ import type {
   ProjectCommand,
   ProjectDocument,
 } from "@web-video-editor/domain";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+
+import {
+  MIN_CLIP_DURATION_US,
+  clampClipMove,
+  clampClipSourceEnd,
+  clampClipSourceStart,
+  clipDurationUs,
+  type ClipTrimLimit,
+  type ClipTrimResult,
+} from "../timeline/timelineMath";
 
 import "./Inspector.css";
 
@@ -22,6 +32,40 @@ function microseconds(value: string): number {
   return Math.max(0, Math.round(Number(value) * 1_000_000));
 }
 
+function parseMicroseconds(value: string): number | null {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return null;
+  }
+  return Math.round(seconds * 1_000_000);
+}
+
+function trimLimitNotice(limit: ClipTrimLimit): string | undefined {
+  switch (limit) {
+    case "minimum-duration":
+      return `片段已达到最小时长 ${seconds(MIN_CLIP_DURATION_US)} 秒。`;
+    case "source-boundary":
+      return "输入已受素材边界限制。";
+    case "timeline-boundary":
+      return "输入已受时间线起点限制。";
+    case "track-conflict":
+      return "输入已受同轨相邻片段限制，不能产生重叠。";
+    case "none":
+      return undefined;
+  }
+}
+
+function clipTrimChanged(
+  clip: ProjectDocument["clips"][number],
+  trim: ClipTrimResult,
+): boolean {
+  return (
+    clip.timelineStartUs !== trim.timelineStartUs ||
+    clip.sourceStartUs !== trim.sourceStartUs ||
+    clip.sourceEndUs !== trim.sourceEndUs
+  );
+}
+
 export function Inspector({
   onExecute,
   project,
@@ -29,6 +73,7 @@ export function Inspector({
   selectedTextId,
 }: InspectorProps) {
   const transactions = useRef(new Map<string, string>());
+  const [clipTimeNotice, setClipTimeNotice] = useState<string | undefined>();
   const clip = project.clips.find(
     (candidate) => candidate.id === selectedClipId,
   );
@@ -104,6 +149,105 @@ export function Inspector({
       transaction(`transform-${clip.id}-${field}`),
     );
   };
+  const executeClipTrim = (
+    field: string,
+    trim: ClipTrimResult,
+    notice?: string,
+  ) => {
+    if (!clip) {
+      return;
+    }
+    setClipTimeNotice(notice ?? trimLimitNotice(trim.limit));
+    if (!clipTrimChanged(clip, trim)) {
+      return;
+    }
+    onExecute(
+      {
+        clipId: clip.id,
+        sourceEndUs: trim.sourceEndUs,
+        sourceStartUs: trim.sourceStartUs,
+        timelineStartUs: trim.timelineStartUs,
+        type: "clip.trim",
+      },
+      transaction(`clip-${clip.id}-${field}`),
+    );
+  };
+  const updateClipTimelineStart = (value: string) => {
+    if (!clip) {
+      return;
+    }
+    const requestedStartUs = parseMicroseconds(value);
+    if (requestedStartUs === null) {
+      setClipTimeNotice("请输入非负秒数。");
+      return;
+    }
+    const timelineStartUs = clampClipMove(project, clip.id, requestedStartUs);
+    setClipTimeNotice(
+      timelineStartUs === requestedStartUs
+        ? undefined
+        : "输入已受同轨相邻片段限制，不能产生重叠。",
+    );
+    if (timelineStartUs === clip.timelineStartUs) {
+      return;
+    }
+    onExecute(
+      {
+        clipId: clip.id,
+        timelineStartUs,
+        type: "clip.move",
+      },
+      transaction(`clip-${clip.id}-timeline`),
+    );
+  };
+  const updateClipSourceStart = (value: string) => {
+    if (!clip) {
+      return;
+    }
+    const sourceStartUs = parseMicroseconds(value);
+    if (sourceStartUs === null) {
+      setClipTimeNotice("请输入非负秒数。");
+      return;
+    }
+    executeClipTrim(
+      "source-start",
+      clampClipSourceStart(project, clip, sourceStartUs),
+    );
+  };
+  const updateClipSourceEnd = (value: string) => {
+    if (!clip || !asset) {
+      setClipTimeNotice("素材信息缺失，无法裁剪。");
+      return;
+    }
+    const sourceEndUs = parseMicroseconds(value);
+    if (sourceEndUs === null) {
+      setClipTimeNotice("请输入非负秒数。");
+      return;
+    }
+    executeClipTrim(
+      "source-end",
+      clampClipSourceEnd(project, clip, asset.durationUs, sourceEndUs),
+    );
+  };
+  const updateClipDuration = (value: string) => {
+    if (!clip || !asset) {
+      setClipTimeNotice("素材信息缺失，无法改长。");
+      return;
+    }
+    const durationUs = parseMicroseconds(value);
+    if (durationUs === null || durationUs <= 0) {
+      setClipTimeNotice("请输入大于 0 的片段时长。");
+      return;
+    }
+    executeClipTrim(
+      "duration",
+      clampClipSourceEnd(
+        project,
+        clip,
+        asset.durationUs,
+        clip.sourceStartUs + durationUs,
+      ),
+    );
+  };
 
   if (!clip && !text) {
     return (
@@ -130,24 +274,35 @@ export function Inspector({
         <>
           <fieldset>
             <legend>片段时间</legend>
+            {clipTimeNotice ? (
+              <p className="inspector__notice" role="status">
+                {clipTimeNotice}
+              </p>
+            ) : null}
             <label>
               时间线起点（秒）
               <input
                 min={0}
                 onBlur={() => endTransaction(`clip-${clip.id}-timeline`)}
                 onChange={(event) =>
-                  onExecute(
-                    {
-                      clipId: clip.id,
-                      timelineStartUs: microseconds(event.currentTarget.value),
-                      type: "clip.move",
-                    },
-                    transaction(`clip-${clip.id}-timeline`),
-                  )
+                  updateClipTimelineStart(event.currentTarget.value)
                 }
                 step={0.01}
                 type="number"
                 value={seconds(clip.timelineStartUs)}
+              />
+            </label>
+            <label>
+              片段时长（秒）
+              <input
+                min={seconds(MIN_CLIP_DURATION_US)}
+                onBlur={() => endTransaction(`clip-${clip.id}-duration`)}
+                onChange={(event) =>
+                  updateClipDuration(event.currentTarget.value)
+                }
+                step={0.01}
+                type="number"
+                value={seconds(clipDurationUs(clip))}
               />
             </label>
             <label>
@@ -156,16 +311,7 @@ export function Inspector({
                 min={0}
                 onBlur={() => endTransaction(`clip-${clip.id}-source-start`)}
                 onChange={(event) =>
-                  onExecute(
-                    {
-                      clipId: clip.id,
-                      sourceEndUs: clip.sourceEndUs,
-                      sourceStartUs: microseconds(event.currentTarget.value),
-                      timelineStartUs: clip.timelineStartUs,
-                      type: "clip.trim",
-                    },
-                    transaction(`clip-${clip.id}-source-start`),
-                  )
+                  updateClipSourceStart(event.currentTarget.value)
                 }
                 step={0.01}
                 type="number"
@@ -179,16 +325,7 @@ export function Inspector({
                 min={0.1}
                 onBlur={() => endTransaction(`clip-${clip.id}-source-end`)}
                 onChange={(event) =>
-                  onExecute(
-                    {
-                      clipId: clip.id,
-                      sourceEndUs: microseconds(event.currentTarget.value),
-                      sourceStartUs: clip.sourceStartUs,
-                      timelineStartUs: clip.timelineStartUs,
-                      type: "clip.trim",
-                    },
-                    transaction(`clip-${clip.id}-source-end`),
-                  )
+                  updateClipSourceEnd(event.currentTarget.value)
                 }
                 step={0.01}
                 type="number"

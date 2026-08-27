@@ -24,24 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionAvailability } from "../capabilities";
 import "./MediaPanel.css";
 import { ProxyProgress, type ProxyProgressState } from "./ProxyProgress";
-
-const TEST_ASSETS = [
-  {
-    description: "方形短视频 · 约 2.88 MB",
-    name: "test_1.mp4",
-    url: "/test_assets/test_1.mp4",
-  },
-  {
-    description: "横屏长视频 · 约 911 MB",
-    name: "test_2.mp4",
-    url: "/test_assets/test_2.mp4",
-  },
-  {
-    description: "竖屏视频 · 约 141.75 MB",
-    name: "test_3.mp4",
-    url: "/test_assets/test_3.mp4",
-  },
-] as const;
+import { TEST_ASSETS } from "./testAssets";
 
 const LONG_PROXY_DURATION_SEC = 10 * 60;
 const PROXY_TIMEOUT_MIN_MS = 5 * 60_000;

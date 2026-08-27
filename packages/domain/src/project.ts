@@ -5,6 +5,8 @@ import {
   type ProjectDocument,
 } from "./schema";
 
+export const MIN_CLIP_DURATION_US = 100_000;
+
 export type CreateProjectOptions = {
   id: string;
   name: string;

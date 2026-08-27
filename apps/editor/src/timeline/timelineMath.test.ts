@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 import {
   appendTimelineStartUs,
   clampClipMove,
+  clampClipSourceEnd,
+  clampClipTrimStart,
   clampTextMove,
   pixelsToTimeUs,
   projectDurationUs,
@@ -158,6 +160,56 @@ describe("timeline math", () => {
     );
     expect(clampClipMove(project, "clip-1", 6_000_000, "video-track-2")).toBe(
       6_000_000,
+    );
+  });
+
+  it("trims the left edge while keeping the right boundary stable", () => {
+    const project = projectWithClips();
+    const clip = project.clips[0]!;
+
+    const trim = clampClipTrimStart(project, clip, 2_000_000);
+
+    expect(trim).toEqual({
+      limit: "none",
+      sourceEndUs: 5_000_000,
+      sourceStartUs: 2_000_000,
+      timelineStartUs: 2_000_000,
+    });
+    expect(trim.timelineStartUs + trim.sourceEndUs - trim.sourceStartUs).toBe(
+      5_000_000,
+    );
+  });
+
+  it("clamps left and right trim edits against adjacent clips", () => {
+    const project = projectWithClips();
+    project.clips[0]!.timelineStartUs = 2_000_000;
+    project.clips[0]!.sourceStartUs = 2_000_000;
+    project.clips[1]!.sourceStartUs = 5_000_000;
+    project.clips[1]!.sourceEndUs = 9_000_000;
+    const firstClip = project.clips[0]!;
+    const secondClip = project.clips[1]!;
+
+    expect(clampClipTrimStart(project, firstClip, -3_000_000)).toEqual(
+      expect.objectContaining({
+        limit: "timeline-boundary",
+        sourceStartUs: 0,
+        timelineStartUs: 0,
+      }),
+    );
+    expect(
+      clampClipSourceEnd(project, firstClip, 20_000_000, 8_000_000),
+    ).toEqual(
+      expect.objectContaining({
+        limit: "track-conflict",
+        sourceEndUs: 7_000_000,
+      }),
+    );
+    expect(clampClipTrimStart(project, secondClip, -3_000_000)).toEqual(
+      expect.objectContaining({
+        limit: "track-conflict",
+        sourceStartUs: 3_000_000,
+        timelineStartUs: 5_000_000,
+      }),
     );
   });
 
