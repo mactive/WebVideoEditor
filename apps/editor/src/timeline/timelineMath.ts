@@ -1,9 +1,11 @@
 import {
+  MIN_CLIP_DURATION_US,
+  MIN_TEXT_DURATION_US,
   projectContentEndUs,
   type ProjectDocument,
 } from "@web-video-editor/domain";
 
-export const MIN_CLIP_DURATION_US = 100_000;
+export { MIN_CLIP_DURATION_US, MIN_TEXT_DURATION_US };
 export const MIN_TIMELINE_DISPLAY_DURATION_US = 10_000_000;
 
 export function clipDurationUs(clip: ProjectDocument["clips"][number]): number {
@@ -22,6 +24,18 @@ export type ClipTrimResult = {
   sourceEndUs: number;
   sourceStartUs: number;
   timelineStartUs: number;
+};
+
+export type TextTrimLimit =
+  | "minimum-duration"
+  | "none"
+  | "timeline-boundary"
+  | "track-conflict";
+
+export type TextTrimResult = {
+  endUs: number;
+  limit: TextTrimLimit;
+  startUs: number;
 };
 
 export function projectDurationUs(project: ProjectDocument): number {
@@ -162,6 +176,87 @@ export function clampTextMove(
     targetText.endUs - targetText.startUs,
     proposedStartUs,
   );
+}
+
+function sameTrackTextsExcept(
+  project: ProjectDocument,
+  text: ProjectDocument["texts"][number],
+): ProjectDocument["texts"] {
+  return project.texts
+    .filter(
+      (candidate) =>
+        candidate.trackId === text.trackId && candidate.id !== text.id,
+    )
+    .sort((left, right) => left.startUs - right.startUs);
+}
+
+function previousTextEndUs(
+  project: ProjectDocument,
+  text: ProjectDocument["texts"][number],
+): number {
+  const previous = sameTrackTextsExcept(project, text)
+    .filter((candidate) => candidate.startUs < text.startUs)
+    .at(-1);
+  return previous ? previous.endUs : 0;
+}
+
+function nextTextStartUs(
+  project: ProjectDocument,
+  text: ProjectDocument["texts"][number],
+): number | undefined {
+  return sameTrackTextsExcept(project, text).find(
+    (candidate) => candidate.startUs > text.startUs,
+  )?.startUs;
+}
+
+export function clampTextTrimStart(
+  project: ProjectDocument,
+  text: ProjectDocument["texts"][number],
+  proposedStartUs: number,
+): TextTrimResult {
+  const roundedStartUs = Math.round(proposedStartUs);
+  const previousEndUs = previousTextEndUs(project, text);
+  const minimumStartUs = Math.max(0, previousEndUs);
+  const maximumStartUs = text.endUs - MIN_TEXT_DURATION_US;
+  const startUs = clamp(roundedStartUs, minimumStartUs, maximumStartUs);
+  let limit: TextTrimLimit = "none";
+
+  if (startUs > roundedStartUs) {
+    limit = previousEndUs > 0 ? "track-conflict" : "timeline-boundary";
+  } else if (startUs < roundedStartUs) {
+    limit = "minimum-duration";
+  }
+
+  return {
+    endUs: text.endUs,
+    limit,
+    startUs,
+  };
+}
+
+export function clampTextTrimEnd(
+  project: ProjectDocument,
+  text: ProjectDocument["texts"][number],
+  proposedEndUs: number,
+): TextTrimResult {
+  const roundedEndUs = Math.round(proposedEndUs);
+  const nextStartUs = nextTextStartUs(project, text);
+  const minimumEndUs = text.startUs + MIN_TEXT_DURATION_US;
+  const maximumEndUs = nextStartUs ?? Number.MAX_SAFE_INTEGER;
+  const endUs = clamp(roundedEndUs, minimumEndUs, maximumEndUs);
+  let limit: TextTrimLimit = "none";
+
+  if (endUs > roundedEndUs) {
+    limit = "minimum-duration";
+  } else if (endUs < roundedEndUs) {
+    limit = "track-conflict";
+  }
+
+  return {
+    endUs,
+    limit,
+    startUs: text.startUs,
+  };
 }
 
 function sameTrackClipsExcept(

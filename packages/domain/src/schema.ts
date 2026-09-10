@@ -3,10 +3,16 @@ import { z } from "zod";
 export const PROJECT_SCHEMA_VERSION = 2 as const;
 export const DEFAULT_TIMELINE_DURATION_US = 60_000_000;
 export const DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND = 80;
+export const DEFAULT_TEXT_FONT_FAMILY = "Inter, sans-serif";
+export const DEFAULT_TEXT_STROKE_COLOR = "#000000";
+export const DEFAULT_TEXT_STROKE_WIDTH = 0;
+export const DEFAULT_TEXT_BACKGROUND_COLOR = "#000000";
+export const DEFAULT_TEXT_BACKGROUND_OPACITY = 0;
 
 const idSchema = z.string().trim().min(1);
 const timestampSchema = z.string().datetime({ offset: true });
 const microsecondsSchema = z.number().int().nonnegative();
+const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 const assetTrackSchema = z
   .object({
@@ -131,12 +137,20 @@ export const textSchema = z
     text: z.string(),
     startUs: microsecondsSchema,
     endUs: z.number().int().positive(),
-    fontSize: z.number().positive(),
-    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-    x: z.number(),
-    y: z.number(),
+    fontSize: z.number().finite(),
+    fontFamily: z.string().trim().min(1).default(DEFAULT_TEXT_FONT_FAMILY),
+    color: colorSchema,
+    strokeColor: colorSchema.default(DEFAULT_TEXT_STROKE_COLOR),
+    strokeWidth: z.number().finite().default(DEFAULT_TEXT_STROKE_WIDTH),
+    backgroundColor: colorSchema.default(DEFAULT_TEXT_BACKGROUND_COLOR),
+    backgroundOpacity: z
+      .number()
+      .finite()
+      .default(DEFAULT_TEXT_BACKGROUND_OPACITY),
+    x: z.number().finite(),
+    y: z.number().finite(),
     scale: z.number().positive(),
-    rotationDeg: z.number(),
+    rotationDeg: z.number().finite(),
   })
   .strict();
 
@@ -196,6 +210,7 @@ export type ClipTransform = z.infer<typeof clipTransformSchema>;
 export type Clip = z.infer<typeof clipSchema>;
 export type Text = z.infer<typeof textSchema>;
 export type TextItem = Text;
+export type TextItemInput = z.input<typeof textSchema>;
 export type Canvas = z.infer<typeof canvasSchema>;
 export type ExportSettings = z.infer<typeof exportSettingsSchema>;
 export type TimelineSettings = z.infer<typeof timelineSchema>;

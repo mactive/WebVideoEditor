@@ -2,7 +2,9 @@ import { type ProjectDocument, projectDocumentSchema } from "./schema";
 import {
   clipDurationUs,
   MIN_CLIP_DURATION_US,
+  MIN_TEXT_DURATION_US,
   projectContentEndUs,
+  textDurationUs,
 } from "./project";
 
 export type ProjectValidationIssue = {
@@ -145,19 +147,55 @@ export function validateProjectInvariants(
   }
 
   for (const [index, text] of project.texts.entries()) {
+    const path = `texts.${index}`;
     const track = tracks.get(text.trackId);
     if (!track || track.kind !== "text") {
       issues.push({
         code: "invalid_reference",
-        path: `texts.${index}.trackId`,
+        path: `${path}.trackId`,
         message: `轨道 "${text.trackId}" 不存在或不是文字轨`,
       });
     }
     if (text.startUs >= text.endUs) {
       issues.push({
         code: "invalid_boundary",
-        path: `texts.${index}`,
+        path,
         message: "文字开始时间必须小于结束时间",
+      });
+    }
+    if (
+      text.startUs < text.endUs &&
+      textDurationUs(text) < MIN_TEXT_DURATION_US
+    ) {
+      issues.push({
+        code: "invalid_boundary",
+        path,
+        message: `文字时长不能短于 ${MIN_TEXT_DURATION_US} 微秒`,
+      });
+    }
+    if (!Number.isFinite(text.fontSize) || text.fontSize <= 0) {
+      issues.push({
+        code: "invalid_boundary",
+        path: `${path}.fontSize`,
+        message: "文字字号必须大于 0",
+      });
+    }
+    if (!Number.isFinite(text.strokeWidth) || text.strokeWidth < 0) {
+      issues.push({
+        code: "invalid_boundary",
+        path: `${path}.strokeWidth`,
+        message: "文字描边宽度不能小于 0",
+      });
+    }
+    if (
+      !Number.isFinite(text.backgroundOpacity) ||
+      text.backgroundOpacity < 0 ||
+      text.backgroundOpacity > 1
+    ) {
+      issues.push({
+        code: "invalid_boundary",
+        path: `${path}.backgroundOpacity`,
+        message: "文字背景透明度必须在 0 到 1 之间",
       });
     }
   }
@@ -190,6 +228,33 @@ export function validateProjectInvariants(
           code: "overlap",
           path: `clips.${current.id}`,
           message: `片段 "${previous.id}" 与 "${current.id}" 重叠`,
+        });
+      }
+    }
+  }
+
+  const textsByTrack = new Map<string, typeof project.texts>();
+  for (const text of project.texts) {
+    const track = tracks.get(text.trackId);
+    if (!track || track.kind !== "text") {
+      continue;
+    }
+    const texts = textsByTrack.get(text.trackId) ?? [];
+    texts.push(text);
+    textsByTrack.set(text.trackId, texts);
+  }
+  for (const texts of textsByTrack.values()) {
+    const sorted = [...texts].sort(
+      (left, right) => left.startUs - right.startUs,
+    );
+    for (let index = 1; index < sorted.length; index += 1) {
+      const previous = sorted[index - 1];
+      const current = sorted[index];
+      if (previous && current && previous.endUs > current.startUs) {
+        issues.push({
+          code: "overlap",
+          path: `texts.${current.id}`,
+          message: `文字 "${previous.id}" 与 "${current.id}" 重叠`,
         });
       }
     }

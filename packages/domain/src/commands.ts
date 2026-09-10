@@ -4,8 +4,10 @@ import type {
   Effect,
   ProjectDocument,
   TextItem,
+  TextItemInput,
   Track,
 } from "./schema";
+import { textSchema } from "./schema";
 import {
   clipDurationUs,
   MIN_CLIP_DURATION_US,
@@ -27,6 +29,11 @@ export type AddVideoTrackCommand = {
 
 export type AddAudioTrackCommand = {
   type: "track.audio.add";
+  trackId?: string;
+};
+
+export type AddTextTrackCommand = {
+  type: "track.text.add";
   trackId?: string;
 };
 
@@ -86,7 +93,7 @@ export type DeleteClipCommand = {
 
 export type AddTextCommand = {
   type: "text.add";
-  text: TextItem;
+  text: TextItemInput;
 };
 
 export type DeleteTextCommand = {
@@ -101,11 +108,16 @@ export type UpdateTextCommand = {
     Pick<
       TextItem,
       | "color"
+      | "backgroundColor"
+      | "backgroundOpacity"
       | "endUs"
+      | "fontFamily"
       | "fontSize"
       | "rotationDeg"
       | "scale"
       | "startUs"
+      | "strokeColor"
+      | "strokeWidth"
       | "text"
       | "trackId"
       | "x"
@@ -124,6 +136,7 @@ export type SetEffectCommand = {
 export type ProjectCommand =
   | AddAssetCommand
   | AddAudioTrackCommand
+  | AddTextTrackCommand
   | AddVideoTrackCommand
   | AddClipCommand
   | AddTextCommand
@@ -202,14 +215,14 @@ function ensureTimelineDurationCoversContent(project: ProjectDocument): void {
   );
 }
 
-function createMediaTrack(
+function createTrack(
   project: ProjectDocument,
-  kind: "audio" | "video",
+  kind: Track["kind"],
   trackId?: string,
 ): Track {
   const trackIndex =
     project.tracks.filter((track) => track.kind === kind).length + 1;
-  const label = kind === "video" ? "视频" : "音频";
+  const label = kindLabel(kind);
   let id =
     trackId ??
     (trackIndex === 1 ? `${kind}-track` : `${kind}-track-${trackIndex}`);
@@ -255,6 +268,7 @@ function applyUnchecked(
       break;
     }
     case "track.audio.add":
+    case "track.text.add":
     case "track.video.add": {
       if (
         command.trackId &&
@@ -263,9 +277,13 @@ function applyUnchecked(
         throw new Error(`轨道 "${command.trackId}" 已存在`);
       }
       project.tracks.push(
-        createMediaTrack(
+        createTrack(
           project,
-          command.type === "track.video.add" ? "video" : "audio",
+          command.type === "track.video.add"
+            ? "video"
+            : command.type === "track.audio.add"
+              ? "audio"
+              : "text",
           command.trackId,
         ),
       );
@@ -416,7 +434,7 @@ function applyUnchecked(
       if (project.texts.some((text) => text.id === command.text.id)) {
         throw new Error(`文字 "${command.text.id}" 已存在`);
       }
-      project.texts.push(command.text);
+      project.texts.push(textSchema.parse(command.text));
       break;
     }
     case "text.delete": {

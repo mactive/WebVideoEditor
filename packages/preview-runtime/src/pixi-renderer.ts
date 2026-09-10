@@ -4,6 +4,7 @@ import {
   CanvasSource,
   ColorMatrixFilter,
   Container,
+  Graphics,
   Sprite,
   Text,
   Texture,
@@ -51,12 +52,20 @@ type VideoLayerState = {
   sprite: Sprite;
 };
 
+type TextLayerState = {
+  background: Graphics;
+  container: Container;
+  text: Text;
+};
+
+const TEXT_BACKGROUND_PADDING_X_RATIO = 0.35;
+const TEXT_BACKGROUND_PADDING_Y_RATIO = 0.22;
+
 export class PixiPreviewRenderer implements RuntimeRenderTarget {
   private readonly application = new Application();
-  private readonly textNodes = new Map<string, Text>();
+  private readonly textNodes = new Map<string, TextLayerState>();
   private readonly videoLayers = new Map<string, VideoLayerState>();
-  private readonly videoLayer = new Container();
-  private readonly textLayer = new Container();
+  private readonly sceneLayer = new Container();
   private initialized = false;
 
   constructor(private readonly options: PixiPreviewRendererOptions) {}
@@ -73,7 +82,7 @@ export class PixiPreviewRenderer implements RuntimeRenderTarget {
       resolution: 1,
       width: profile.width,
     });
-    this.application.stage.addChild(this.videoLayer, this.textLayer);
+    this.application.stage.addChild(this.sceneLayer);
     this.application.canvas.dataset.previewCanvas = "pixi-v8";
     host.replaceChildren(this.application.canvas);
     this.initialized = true;
@@ -85,60 +94,100 @@ export class PixiPreviewRenderer implements RuntimeRenderTarget {
       return;
     }
     const visibleVideoIds = new Set<string>();
+    const visibleTextIds = new Set<string>();
     for (const entity of entities) {
-      if (!entity.video) {
-        continue;
+      if (entity.video) {
+        visibleVideoIds.add(entity.id);
+        const layer = this.ensureVideoLayer(entity.id);
+        const { animation, effects, transform } = entity;
+        layer.sprite.visible = true;
+        layer.sprite.alpha = animation.opacity;
+        layer.sprite.position.set(transform.x, transform.y);
+        layer.sprite.rotation = transform.rotationRad;
+        layer.sprite.width = transform.width * transform.scaleX;
+        layer.sprite.height = transform.height * transform.scaleY;
+        layer.sprite.filters = createPixiEffectFilters(effects.resolved);
+        this.sceneLayer.addChild(layer.sprite);
       }
-      visibleVideoIds.add(entity.id);
-      const layer = this.ensureVideoLayer(entity.id);
-      const { animation, effects, transform } = entity;
-      layer.sprite.visible = true;
-      layer.sprite.alpha = animation.opacity;
-      layer.sprite.position.set(transform.x, transform.y);
-      layer.sprite.rotation = transform.rotationRad;
-      layer.sprite.width = transform.width * transform.scaleX;
-      layer.sprite.height = transform.height * transform.scaleY;
-      layer.sprite.filters = createPixiEffectFilters(effects.resolved);
-      this.videoLayer.addChild(layer.sprite);
+      if (entity.text) {
+        visibleTextIds.add(entity.id);
+        const layer = this.ensureTextLayer(entity.id);
+        this.syncTextLayer(layer, entity);
+        this.sceneLayer.addChild(layer.container);
+      }
     }
     for (const [id, layer] of this.videoLayers) {
       if (!visibleVideoIds.has(id)) {
         this.releaseVideoLayer(id, layer);
       }
     }
-
-    const visibleTextIds = new Set<string>();
-    for (const entity of entities) {
-      if (!entity.text) {
-        continue;
-      }
-      visibleTextIds.add(entity.id);
-      let node = this.textNodes.get(entity.id);
-      if (!node) {
-        node = new Text({
-          anchor: 0.5,
-          style: {
-            fontFamily: "Inter, sans-serif",
-            fontWeight: "700",
-          },
-          text: entity.text.value,
-        });
-        this.textNodes.set(entity.id, node);
-        this.textLayer.addChild(node);
-      }
-      node.visible = true;
-      node.text = entity.text.value;
-      node.style.fill = entity.text.color;
-      node.style.fontSize = entity.text.fontSize;
-      node.alpha = entity.animation.opacity;
-      node.position.set(entity.transform.x, entity.transform.y);
-      node.rotation = entity.transform.rotationRad;
-      node.scale.set(entity.transform.scaleX, entity.transform.scaleY);
-    }
-    for (const [id, node] of this.textNodes) {
-      node.visible = visibleTextIds.has(id);
+    for (const [id, layer] of this.textNodes) {
+      layer.container.visible = visibleTextIds.has(id);
     }
     this.application.render();
+  }
+
+  private ensureTextLayer(entityId: string): TextLayerState {
+    const existing = this.textNodes.get(entityId);
+    if (existing) {
+      return existing;
+    }
+    const background = new Graphics();
+    const text = new Text({
+      anchor: 0.5,
+      style: {
+        fontFamily: "Inter, sans-serif",
+        fontWeight: "700",
+      },
+    });
+    const container = new Container();
+    container.addChild(background, text);
+    container.visible = false;
+    const layer = { background, container, text };
+    this.textNodes.set(entityId, layer);
+    return layer;
+  }
+
+  private syncTextLayer(layer: TextLayerState, entity: RuntimeEntity): void {
+    if (!entity.text) {
+      return;
+    }
+    const { background, container, text } = layer;
+    container.visible = true;
+    container.alpha = entity.animation.opacity;
+    container.position.set(entity.transform.x, entity.transform.y);
+    container.rotation = entity.transform.rotationRad;
+    container.scale.set(entity.transform.scaleX, entity.transform.scaleY);
+    text.text = entity.text.value;
+    text.style.fill = entity.text.color;
+    text.style.fontFamily = entity.text.fontFamily;
+    text.style.fontSize = entity.text.fontSize;
+    text.style.padding = Math.ceil(Math.max(2, entity.text.strokeWidth));
+    text.style.stroke = {
+      color: entity.text.strokeColor,
+      width: entity.text.strokeWidth,
+    };
+    background.clear();
+    background.visible = entity.text.backgroundOpacity > 0;
+    if (!background.visible) {
+      return;
+    }
+    const paddingX = Math.max(
+      4,
+      entity.text.fontSize * TEXT_BACKGROUND_PADDING_X_RATIO,
+    );
+    const paddingY = Math.max(
+      2,
+      entity.text.fontSize * TEXT_BACKGROUND_PADDING_Y_RATIO,
+    );
+    const width = text.width + paddingX * 2;
+    const height = text.height + paddingY * 2;
+    background
+      .roundRect(-width / 2, -height / 2, width, height, paddingY)
+      .fill({
+        alpha: entity.text.backgroundOpacity,
+        color: colorNumber(entity.text.backgroundColor),
+      });
   }
 
   present(
@@ -197,8 +246,8 @@ export class PixiPreviewRenderer implements RuntimeRenderTarget {
     if (!this.initialized) {
       return;
     }
-    for (const node of this.textNodes.values()) {
-      node.destroy();
+    for (const layer of this.textNodes.values()) {
+      layer.container.destroy({ children: true });
     }
     this.textNodes.clear();
     for (const [id, layer] of this.videoLayers) {
@@ -245,7 +294,6 @@ export class PixiPreviewRenderer implements RuntimeRenderTarget {
     sprite.visible = false;
     const layer = { canvas, source, sprite };
     this.videoLayers.set(entityId, layer);
-    this.videoLayer.addChild(sprite);
     return layer;
   }
 

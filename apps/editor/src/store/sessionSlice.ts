@@ -9,6 +9,7 @@ export type EditorSessionState = {
   selectedClipId: string | null;
   selectedTextId: string | null;
   targetAudioTrackId: string | null;
+  targetTextTrackId: string | null;
   targetVideoTrackId: string | null;
   persistenceStatus: PersistenceStatus;
   persistenceError: string | null;
@@ -21,6 +22,7 @@ const initialState: EditorSessionState = {
   selectedClipId: null,
   selectedTextId: null,
   targetAudioTrackId: null,
+  targetTextTrackId: null,
   targetVideoTrackId: null,
   persistenceStatus: "idle",
   persistenceError: null,
@@ -47,6 +49,9 @@ const sessionSlice = createSlice({
     },
     targetAudioTrackSelected(state, action: PayloadAction<string | null>) {
       state.targetAudioTrackId = action.payload;
+    },
+    targetTextTrackSelected(state, action: PayloadAction<string | null>) {
+      state.targetTextTrackId = action.payload;
     },
     targetVideoTrackSelected(state, action: PayloadAction<string | null>) {
       state.targetVideoTrackId = action.payload;
@@ -80,6 +85,7 @@ export const {
   playbackChanged,
   playheadChanged,
   targetAudioTrackSelected,
+  targetTextTrackSelected,
   targetVideoTrackSelected,
   textSelected,
 } = sessionSlice.actions;

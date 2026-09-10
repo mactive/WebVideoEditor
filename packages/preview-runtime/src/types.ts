@@ -54,8 +54,13 @@ export type VideoComponent = {
 };
 
 export type TextComponent = {
+  backgroundColor: string;
+  backgroundOpacity: number;
   color: string;
+  fontFamily: string;
   fontSize: number;
+  strokeColor: string;
+  strokeWidth: number;
   value: string;
 };
 

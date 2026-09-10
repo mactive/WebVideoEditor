@@ -1,4 +1,9 @@
 import {
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
   DEFAULT_TIMELINE_SCALE_PIXELS_PER_SECOND,
   PROJECT_SCHEMA_VERSION,
   type ProjectDocument,
@@ -83,13 +88,18 @@ export function createPreviewDemo(manifest: ProxyManifest): {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     texts: [
       {
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
         color: "#ffffff",
         endUs: durationUs,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
         fontSize: 46,
         id: "preview-title",
         rotationDeg: -2,
         scale: 1,
         startUs: 0,
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
         text: "TASK 8 · REAL PROXY",
         trackId: "text-track",
         x: 0.5,

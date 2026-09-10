@@ -24,6 +24,12 @@
 也通过 `trackId` 指向 text 轨。默认工程仍创建 `video-track`、`audio-track`、`text-track`，
 旧单轨工程天然等价于 V1/A1/T1。
 
+文字轨可以动态新增。新增后 UI 会把该轨设为当前目标文字轨，“添加标题”会在当前播放头向目标
+文字轨写入新的 TextItem；同一文字轨内的文字时间段仍不能重叠，不同文字轨允许同一工程时间叠放。
+TextItem 持久化的样式字段包括 `fontSize`、`color`、`strokeColor`、`strokeWidth`、
+`backgroundColor`、`backgroundOpacity` 和 `fontFamily`。旧工程缺少描边、背景或字体字段时，
+schema 默认值会补成无描边、无可见背景和默认字体栈。
+
 `ProjectDocument.timeline` 保存工程级时间线配置。`durationUs` 是用户设置的总长，命令层会保证它
 不短于最长 Clip/Text 末尾；预览和导出使用 `max(durationUs, 内容末尾)`，时间线 UI 显示边界再叠加
 最小显示时长。`defaultScale.pixelsPerSecond` 是初始缩放密度，编辑器内缩放只影响像素和滚动宽度，
@@ -83,6 +89,11 @@ sequenceDiagram
 跨轨拖动只允许同类型轨道：视频到视频、音频到音频、文字到文字；目标轨道冲突时会夹紧到最近合法
 位置，并用同一个 `transactionId` 合并为一个 Undo 步骤。
 
+文字属性面板提供内容、开始/结束/持续时长、字号、颜色、描边、背景和字体编辑。字体先给出常用
+CSS 字体栈预设；浏览器支持 `queryLocalFonts()` 且用户授权时可以追加系统字体，否则保留手动
+字体名输入。预览和导出都只保存并消费最终 `fontFamily` 字符串，实际字体缺失时交给浏览器或
+Canvas 字体栈降级。
+
 轨道头支持拖拽重排。`track.reorder` 要求提交完整轨道 ID 列表，并把 order 归一化为 `0..N-1`。
 删除空轨道直接执行；删除含 Clip/Text 的轨道需要确认并通过 `track.delete(cascade=true)` 级联删除
 内容；最后一条同类型轨道会被拒绝。删除成功后 UI 会清空失效选区，并把目标视频/音频轨切换到仍
@@ -116,6 +127,9 @@ flowchart LR
 不进入 ECS 画面 entity；它们由音频播放器和导出混音路径单独消费。
 adapter 只编译仍指向现存同类型轨道的 video/text 内容；删轨后的级联内容不会保留 entity，外部导入
 造成的孤儿 track 引用也不会进入预览画面。
+文字 entity 会携带字体、字号、文字颜色、描边颜色/宽度、背景色/透明度；Pixi 预览和导出
+OffscreenCanvas 使用同一套 ECS 时间范围、轨道 order 和样式字段，因此 `[startUs, endUs)` 外
+不会渲染该文字，范围内的预览与导出语义保持一致。
 
 每次 seek/playback tick 时，系统按固定顺序运行：
 
@@ -248,3 +262,4 @@ Console: [ECS] evaluate -> [RENDER] present -> [EXPORT] started/progress/complet
 - 多轨导出合成与混音：[apps/editor/src/export/export-pipeline.ts](/source/apps/editor/src/export/export-pipeline.ts.txt)
 - 预览多轨 E2E：[apps/editor/e2e/preview.spec.ts](/source/apps/editor/e2e/preview.spec.ts.txt)
 - 导出多轨 E2E：[apps/editor/e2e/task18-export.spec.ts](/source/apps/editor/e2e/task18-export.spec.ts.txt)
+- 文字轨预览与导出 E2E：[apps/editor/e2e/text-tracks.spec.ts](/source/apps/editor/e2e/text-tracks.spec.ts.txt)

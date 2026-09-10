@@ -2,7 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import { CommandBus, type CommandEvent } from "./command-bus";
 import { applyProjectCommand, type ProjectCommand } from "./commands";
-import { createProjectDocument, MIN_CLIP_DURATION_US } from "./project";
+import {
+  createProjectDocument,
+  MIN_CLIP_DURATION_US,
+  MIN_TEXT_DURATION_US,
+} from "./project";
+import {
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
+} from "./schema";
 import { createTestProject } from "./test-fixture";
 
 const now = "2026-08-09T01:00:00.000Z";
@@ -24,7 +35,9 @@ function addTrack(
 
 function addAudioClip(
   project: ReturnType<typeof createTestProject>,
-  overrides: Partial<ReturnType<typeof createTestProject>["clips"][number]> = {},
+  overrides: Partial<
+    ReturnType<typeof createTestProject>["clips"][number]
+  > = {},
 ): void {
   const trackId = overrides.trackId ?? "audio-1";
   if (!project.tracks.some((track) => track.id === trackId)) {
@@ -139,6 +152,20 @@ describe("project commands", () => {
     },
     {
       command: {
+        type: "track.text.add",
+      },
+      verify: (project) =>
+        expect(project.tracks.at(-1)).toEqual({
+          id: "text-track-2",
+          kind: "text",
+          name: "文字 2",
+          order: 2,
+          muted: false,
+          locked: false,
+        }),
+    },
+    {
+      command: {
         type: "clip.add",
         clip: {
           id: "clip-3",
@@ -244,10 +271,16 @@ describe("project commands", () => {
         },
       },
       verify: (project) =>
-        expect(project.texts.map((text) => text.id)).toEqual([
-          "title-1",
-          "title-2",
-        ]),
+        expect(project.texts[1]).toEqual(
+          expect.objectContaining({
+            id: "title-2",
+            fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+            strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+            strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+            backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+            backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
+          }),
+        ),
     },
     {
       command: { type: "text.delete", textId: "title-1" },
@@ -257,11 +290,35 @@ describe("project commands", () => {
       command: {
         type: "text.update",
         textId: "title-1",
-        patch: { text: "新标题", rotationDeg: 15 },
+        patch: {
+          text: "新标题",
+          startUs: 1_000_000,
+          endUs: 4_000_000,
+          fontFamily: "Arial, sans-serif",
+          fontSize: 56,
+          color: "#ffcc00",
+          strokeColor: "#101010",
+          strokeWidth: 3,
+          backgroundColor: "#202020",
+          backgroundOpacity: 0.5,
+          rotationDeg: 15,
+        },
       },
       verify: (project) =>
         expect(project.texts[0]).toEqual(
-          expect.objectContaining({ text: "新标题", rotationDeg: 15 }),
+          expect.objectContaining({
+            text: "新标题",
+            startUs: 1_000_000,
+            endUs: 4_000_000,
+            fontFamily: "Arial, sans-serif",
+            fontSize: 56,
+            color: "#ffcc00",
+            strokeColor: "#101010",
+            strokeWidth: 3,
+            backgroundColor: "#202020",
+            backgroundOpacity: 0.5,
+            rotationDeg: 15,
+          }),
         ),
     },
     {
@@ -907,6 +964,78 @@ describe("project commands", () => {
       }),
     );
   });
+
+  it("rejects text.update patches with invalid time ranges", () => {
+    expect(() =>
+      applyProjectCommand(
+        createTestProject(),
+        {
+          type: "text.update",
+          textId: "title-1",
+          patch: { startUs: 4_000_000, endUs: 4_000_000 },
+        },
+        now,
+      ),
+    ).toThrow("文字开始时间必须小于结束时间");
+  });
+
+  it("rejects text.add and text.update results shorter than the minimum duration", () => {
+    const shortEndUs = MIN_TEXT_DURATION_US - 1;
+    expect(() =>
+      applyProjectCommand(
+        createTestProject(),
+        {
+          type: "text.add",
+          text: {
+            id: "short-title",
+            trackId: "text-1",
+            text: "短标题",
+            startUs: 0,
+            endUs: shortEndUs,
+            fontSize: 48,
+            color: "#ffffff",
+            x: 0.5,
+            y: 0.5,
+            scale: 1,
+            rotationDeg: 0,
+          },
+        },
+        now,
+      ),
+    ).toThrow("文字时长不能短于");
+
+    const bus = new CommandBus(createTestProject(), { now: () => now });
+    expect(() =>
+      bus.execute({
+        type: "text.update",
+        textId: "title-1",
+        patch: { endUs: shortEndUs },
+      }),
+    ).toThrow("文字时长不能短于");
+    expect(bus.document).toEqual(createTestProject());
+  });
+
+  it("rejects text updates that overlap another text on the same track", () => {
+    const project = createTestProject();
+    project.texts.push({
+      ...project.texts[0]!,
+      id: "title-2",
+      startUs: 3_000_000,
+      endUs: 5_000_000,
+    });
+
+    expect(() =>
+      applyProjectCommand(
+        project,
+        {
+          type: "text.update",
+          textId: "title-2",
+          patch: { startUs: 2_000_000, endUs: 5_000_000 },
+        },
+        now,
+      ),
+    ).toThrow("重叠");
+  });
 });
 
 describe("CommandBus", () => {
@@ -936,6 +1065,9 @@ describe("CommandBus", () => {
     {
       type: "track.video.add",
       trackId: "video-2",
+    },
+    {
+      type: "track.text.add",
     },
     {
       type: "clip.add",

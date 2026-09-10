@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { migrateProjectDocument } from "./migrations";
 import {
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
+} from "./schema";
+import { MIN_TEXT_DURATION_US } from "./project";
+import {
   assertPureJson,
   deserializeProjectDocument,
   NonJsonValueError,
@@ -22,6 +30,20 @@ function addAudioTrack(
   project.tracks.push({
     id,
     kind: "audio",
+    name: id,
+    order: Math.max(-1, ...project.tracks.map((track) => track.order)) + 1,
+    muted: false,
+    locked: false,
+  });
+}
+
+function addTextTrack(
+  project: ReturnType<typeof createTestProject>,
+  id: string,
+): void {
+  project.tracks.push({
+    id,
+    kind: "text",
     name: id,
     order: Math.max(-1, ...project.tracks.map((track) => track.order)) + 1,
     muted: false,
@@ -275,6 +297,93 @@ describe("Project Document", () => {
     }
   });
 
+  it("allows overlapping texts on different text tracks", () => {
+    const project = createTestProject();
+    addTextTrack(project, "text-2");
+    project.texts.push({
+      ...project.texts[0]!,
+      id: "title-2",
+      trackId: "text-2",
+      startUs: 1_000_000,
+      endUs: 2_000_000,
+    });
+
+    expect(validateProjectDocument(project)).toEqual({
+      success: true,
+      data: project,
+      issues: [],
+    });
+  });
+
+  it("rejects overlapping texts on the same text track", () => {
+    const project = createTestProject();
+    project.texts.push({
+      ...project.texts[0]!,
+      id: "title-2",
+      startUs: 2_000_000,
+      endUs: 4_000_000,
+    });
+
+    const result = validateProjectDocument(project);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: "overlap",
+          path: "texts.title-2",
+        }),
+      );
+    }
+  });
+
+  it("rejects text durations shorter than the minimum duration", () => {
+    const project = createTestProject();
+    project.texts[0]!.endUs =
+      project.texts[0]!.startUs + MIN_TEXT_DURATION_US - 1;
+
+    const result = validateProjectDocument(project);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: "invalid_boundary",
+          path: "texts.0",
+        }),
+      );
+    }
+  });
+
+  it("rejects out-of-range text style numbers", () => {
+    const project = createTestProject();
+    project.texts[0]!.fontSize = 0;
+    project.texts[0]!.strokeWidth = -1;
+    project.texts[0]!.backgroundOpacity = 1.1;
+
+    const result = validateProjectDocument(project);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "invalid_boundary",
+            path: "texts.0.fontSize",
+          }),
+          expect.objectContaining({
+            code: "invalid_boundary",
+            path: "texts.0.strokeWidth",
+          }),
+          expect.objectContaining({
+            code: "invalid_boundary",
+            path: "texts.0.backgroundOpacity",
+          }),
+        ]),
+      );
+    }
+  });
+
   it("rejects a timeline duration shorter than the content end", () => {
     const project = createTestProject();
     project.timeline.durationUs = 1_000_000;
@@ -342,6 +451,34 @@ describe("Project Document", () => {
     expect(migrated.schemaVersion).toBe(2);
     expect(migrated.timeline.durationUs).toBe(11_000_000);
     expect(migrated.timeline.defaultScale.pixelsPerSecond).toBe(80);
+  });
+
+  it("fills default text style fields for older documents", () => {
+    const legacy = structuredClone(createTestProject()) as unknown as {
+      texts: Array<Record<string, unknown>>;
+    };
+    for (const text of legacy.texts) {
+      delete text.fontFamily;
+      delete text.strokeColor;
+      delete text.strokeWidth;
+      delete text.backgroundColor;
+      delete text.backgroundOpacity;
+    }
+
+    const result = validateProjectDocument(legacy);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.texts[0]).toEqual(
+        expect.objectContaining({
+          fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+          strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+          strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+          backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+          backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
+        }),
+      );
+    }
   });
 
   it("rejects malformed and invariant-breaking migration inputs", () => {

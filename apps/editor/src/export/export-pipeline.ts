@@ -269,15 +269,37 @@ function drawText(
   if (!entity.text) {
     return;
   }
+  const paddingX = Math.max(4, entity.text.fontSize * 0.35);
+  const paddingY = Math.max(2, entity.text.fontSize * 0.22);
   context.save();
   context.globalAlpha = entity.animation.opacity;
   context.fillStyle = entity.text.color;
-  context.font = `700 ${entity.text.fontSize}px Inter, sans-serif`;
+  context.font = `700 ${entity.text.fontSize}px ${entity.text.fontFamily}`;
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.translate(entity.transform.x, entity.transform.y);
   context.rotate(entity.transform.rotationRad);
   context.scale(entity.transform.scaleX, entity.transform.scaleY);
+  if (entity.text.backgroundOpacity > 0) {
+    const metrics = context.measureText(entity.text.value);
+    const width = metrics.width + paddingX * 2;
+    const height =
+      (metrics.actualBoundingBoxAscent || entity.text.fontSize * 0.75) +
+      (metrics.actualBoundingBoxDescent || entity.text.fontSize * 0.25) +
+      paddingY * 2;
+    context.globalAlpha =
+      entity.animation.opacity * entity.text.backgroundOpacity;
+    context.fillStyle = entity.text.backgroundColor;
+    context.fillRect(-width / 2, -height / 2, width, height);
+    context.globalAlpha = entity.animation.opacity;
+    context.fillStyle = entity.text.color;
+  }
+  if (entity.text.strokeWidth > 0) {
+    context.lineJoin = "round";
+    context.lineWidth = entity.text.strokeWidth;
+    context.strokeStyle = entity.text.strokeColor;
+    context.strokeText(entity.text.value, 0, 0);
+  }
   context.fillText(entity.text.value, 0, 0);
   context.restore();
 }

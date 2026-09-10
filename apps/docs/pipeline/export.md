@@ -31,6 +31,12 @@ Export Worker 为每个 active video entity 从原素材读取对应 `VideoSampl
 ID 推断叠放层级。每个视频层独立应用自己的位置、缩放、旋转、滤镜和 opacity；每个 VideoFrame
 编码后立即 close。
 
+文字也由同一次 ECS export profile 求值决定是否 active。导出只在 TextItem 的 `[startUs, endUs)`
+范围内绘制文字，并使用 `fontFamily`、`fontSize`、`color`、`strokeColor`、`strokeWidth`、
+`backgroundColor` 和 `backgroundOpacity`。字体名称按 Canvas 字体栈解析；本机字体枚举只是编辑器
+选择能力，导出不会依赖浏览器必须暴露系统字体列表。文字背景先按透明度绘制到文字包围盒后方，再画
+描边和文字填充，这与 PixiJS 预览使用同一 Project Document 语义。
+
 音频按所有仍挂在现存、未静音音频轨上的 Clip 的源区间裁剪，线性重采样到 48kHz 双声道后按工程
 时间写入固定编码 chunk。不同音频轨可以在同一时间重叠，样本会加和混合并在写入 `AudioData` 前
 限幅到 `[-1, 1]`；静音音频轨、不含音频的素材、以及已删除轨道遗留的 Clip 不会进入混音。
@@ -55,6 +61,8 @@ Task 18 导出用例构造 V1/V2 重叠视频轨道，并通过关键帧像素�
 上层 transformed 画面和标题；同时构造 A1/A2 重叠音频轨道，使用偏移的 A2 尾部约束导出时长
 和音频 packet 末端时间，证明多轨混音结果进入 MP4。用例还断言 `[EXPORT] started/completed`
 worker 日志的输入仍为 `source=original`。
+文字轨 E2E 额外构造 T1/T2 重叠标题，导出后重新用 `<video>` 解码 MP4，在文字范围内检查文字填充、
+描边和背景颜色像素，在范围前后检查这些文字特征消失。
 这些是断言，不是固定导出耗时。
 
 ## 复现与预期输出
@@ -78,3 +86,4 @@ CLI: task12-core 1 passed；输出文件可重新读取为 1920×1080、约 1 �
 - OPFS 文件读取/临时枚举：[apps/editor/src/export/export-opfs.ts](/source/apps/editor/src/export/export-opfs.ts.txt)
 - 核心证据：[apps/editor/e2e/task12-core.spec.ts](/source/apps/editor/e2e/task12-core.spec.ts.txt)
 - 取消、画面、重导入证据：[apps/editor/e2e/task11.spec.ts](/source/apps/editor/e2e/task11.spec.ts.txt)
+- 文字轨导出证据：[apps/editor/e2e/text-tracks.spec.ts](/source/apps/editor/e2e/text-tracks.spec.ts.txt)

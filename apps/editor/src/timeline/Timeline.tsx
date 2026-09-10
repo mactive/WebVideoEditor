@@ -19,11 +19,15 @@ import {
   clampClipTrimStart,
   clampClipMove,
   clampTextMove,
+  clampTextTrimEnd,
+  clampTextTrimStart,
   clipDurationUs,
   type ClipTrimLimit,
   type ClipTrimResult,
   pixelsToTimeUs,
   projectDurationUs,
+  type TextTrimLimit,
+  type TextTrimResult,
   timeUsToPixels,
 } from "./timelineMath";
 import "./Timeline.css";
@@ -37,6 +41,7 @@ export type TimelineProps = {
   canRedo: boolean;
   canUndo: boolean;
   onAddAudioTrack(): void;
+  onAddTextTrack?(): void;
   onAddTitle(): void;
   onAddVideoTrack(): void;
   onDelete(): void;
@@ -47,6 +52,7 @@ export type TimelineProps = {
   onReorderTracks(trackIds: string[]): void;
   onSelectClip(clipId: string): void;
   onSelectTargetAudioTrack(trackId: string): void;
+  onSelectTargetTextTrack?(trackId: string): void;
   onSelectTargetVideoTrack(trackId: string): void;
   onSelectText(textId: string): void;
   onTimelineDurationChange(durationUs: number): void;
@@ -57,6 +63,7 @@ export type TimelineProps = {
   selectedClipId: string | null;
   selectedTextId: string | null;
   targetAudioTrackId: string | null;
+  targetTextTrackId?: string | null;
   targetVideoTrackId: string | null;
 };
 
@@ -74,7 +81,7 @@ type ClipDragState = {
 type TextDragState = {
   initial: ProjectDocument["texts"][number];
   item: "text";
-  mode: "move";
+  mode: "move" | "trim-end" | "trim-start";
   pixelsPerSecond: number;
   pointerId: number;
   startClientX: number;
@@ -200,6 +207,19 @@ function trimLimitNotice(limit: ClipTrimLimit): string | undefined {
   }
 }
 
+function textTrimLimitNotice(limit: TextTrimLimit): string | undefined {
+  switch (limit) {
+    case "minimum-duration":
+      return "文字片段已达到最小时长。";
+    case "timeline-boundary":
+      return "文字片段已受时间线起点限制。";
+    case "track-conflict":
+      return "文字片段已受同轨相邻文字限制，不能产生重叠。";
+    case "none":
+      return undefined;
+  }
+}
+
 function clipTrimChanged(
   clip: ProjectDocument["clips"][number],
   trim: ClipTrimResult,
@@ -211,10 +231,18 @@ function clipTrimChanged(
   );
 }
 
+function textTrimChanged(
+  text: ProjectDocument["texts"][number],
+  trim: TextTrimResult,
+): boolean {
+  return text.startUs !== trim.startUs || text.endUs !== trim.endUs;
+}
+
 export function Timeline({
   canRedo,
   canUndo,
   onAddAudioTrack,
+  onAddTextTrack,
   onAddTitle,
   onAddVideoTrack,
   onDelete,
@@ -225,6 +253,7 @@ export function Timeline({
   onReorderTracks,
   onSelectClip,
   onSelectTargetAudioTrack,
+  onSelectTargetTextTrack,
   onSelectTargetVideoTrack,
   onSelectText,
   onTimelineDurationChange,
@@ -235,6 +264,7 @@ export function Timeline({
   selectedClipId,
   selectedTextId,
   targetAudioTrackId,
+  targetTextTrackId,
   targetVideoTrackId,
 }: TimelineProps) {
   const dragRef = useRef<DragState | undefined>(undefined);
@@ -507,8 +537,9 @@ export function Timeline({
   };
 
   const beginTextDrag = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     text: ProjectDocument["texts"][number],
+    mode: TextDragState["mode"],
   ) => {
     event.preventDefault();
     event.stopPropagation();
@@ -516,12 +547,13 @@ export function Timeline({
     dragRef.current = {
       initial: { ...text },
       item: "text",
-      mode: "move",
+      mode,
       pixelsPerSecond,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       transactionId: `drag-${text.id}-${crypto.randomUUID()}`,
     };
+    onSelectTargetTextTrack?.(text.trackId);
     onSelectText(text.id);
   };
 
@@ -536,6 +568,48 @@ export function Timeline({
     );
     if (drag.item === "text") {
       const text = drag.initial;
+      if (drag.mode === "trim-start") {
+        const trim = clampTextTrimStart(project, text, text.startUs + deltaUs);
+        updateDragNotice(textTrimLimitNotice(trim.limit));
+        const currentText =
+          project.texts.find((candidate) => candidate.id === text.id) ?? text;
+        if (!textTrimChanged(currentText, trim)) {
+          return;
+        }
+        onEdit(
+          {
+            patch: {
+              endUs: trim.endUs,
+              startUs: trim.startUs,
+            },
+            textId: text.id,
+            type: "text.update",
+          },
+          drag.transactionId,
+        );
+        return;
+      }
+      if (drag.mode === "trim-end") {
+        const trim = clampTextTrimEnd(project, text, text.endUs + deltaUs);
+        updateDragNotice(textTrimLimitNotice(trim.limit));
+        const currentText =
+          project.texts.find((candidate) => candidate.id === text.id) ?? text;
+        if (!textTrimChanged(currentText, trim)) {
+          return;
+        }
+        onEdit(
+          {
+            patch: {
+              endUs: trim.endUs,
+              startUs: trim.startUs,
+            },
+            textId: text.id,
+            type: "text.update",
+          },
+          drag.transactionId,
+        );
+        return;
+      }
       const sourceTrack = trackById.get(text.trackId);
       const targetTrack = trackAtPointer(event.clientY) ?? sourceTrack;
       if (!targetTrack || targetTrack.kind !== "text") {
@@ -681,27 +755,43 @@ export function Timeline({
           key={`${track.id}-lane`}
         >
           {orderedTextsForTrack(track.id).map((text) => (
-            <button
-              aria-pressed={selectedTextId === text.id}
+            <div
+              aria-label={text.text || "空标题"}
+              aria-selected={selectedTextId === text.id}
               className="timeline__clip timeline__clip--text"
+              data-text-id={text.id}
               key={text.id}
-              onClick={() => onSelectText(text.id)}
-              onPointerDown={(event) => beginTextDrag(event, text)}
-              onPointerMove={
-                continueDrag as unknown as (
-                  event: ReactPointerEvent<HTMLButtonElement>,
-                ) => void
-              }
-              onPointerUp={
-                endDrag as unknown as (
-                  event: ReactPointerEvent<HTMLButtonElement>,
-                ) => void
-              }
+              onClick={() => {
+                onSelectTargetTextTrack?.(text.trackId);
+                onSelectText(text.id);
+              }}
+              onPointerDown={(event) => beginTextDrag(event, text, "move")}
+              onPointerMove={continueDrag}
+              onPointerUp={endDrag}
+              role="button"
               style={clipStyle(text.startUs, text.endUs)}
-              type="button"
+              tabIndex={0}
             >
-              {text.text || "空标题"}
-            </button>
+              <button
+                aria-label={`裁剪 文字 ${text.text || text.id} 开头`}
+                className="timeline__trim timeline__trim--start"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  beginTextDrag(event, text, "trim-start");
+                }}
+                type="button"
+              />
+              <span>{text.text || "空标题"}</span>
+              <button
+                aria-label={`裁剪 文字 ${text.text || text.id} 结尾`}
+                className="timeline__trim timeline__trim--end"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  beginTextDrag(event, text, "trim-end");
+                }}
+                type="button"
+              />
+            </div>
           ))}
         </div>
       );
@@ -829,7 +919,10 @@ export function Timeline({
           <span>{pixelsPerSecond}px/s</span>
         </label>
         <button onClick={onAddTitle} type="button">
-          添加标题
+          添加文字
+        </button>
+        <button onClick={onAddTextTrack} type="button">
+          新增文字轨
         </button>
         <button onClick={onAddVideoTrack} type="button">
           新增视频轨
@@ -870,7 +963,14 @@ export function Timeline({
               return renderTrackHeader(
                 track,
                 label,
-                <span className="timeline__label">{label}</span>,
+                <button
+                  aria-pressed={targetTextTrackId === track.id}
+                  className="timeline__label timeline__label--button"
+                  onClick={() => onSelectTargetTextTrack?.(track.id)}
+                  type="button"
+                >
+                  {label}
+                </button>,
               );
             }
 

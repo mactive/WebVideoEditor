@@ -2,6 +2,11 @@
 
 import {
   createProjectDocument,
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
   type ProjectDocument,
 } from "@web-video-editor/domain";
 import {
@@ -194,6 +199,9 @@ vi.mock("./preview/PreviewPanel", () => ({
       <button onClick={() => onPlayheadChange?.(2_000_000)} type="button">
         mock seek 2s
       </button>
+      <button onClick={() => onPlayheadChange?.(9_950_000)} type="button">
+        mock seek 9.95s
+      </button>
     </section>
   ),
 }));
@@ -205,6 +213,7 @@ vi.mock("./audio/SyncDebugPanel", () => ({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  delete (window as Window & { queryLocalFonts?: unknown }).queryLocalFonts;
 });
 
 function projectFixture(): ProjectDocument {
@@ -234,13 +243,18 @@ function projectFixture(): ProjectDocument {
     trackId: "video-track",
   });
   project.texts.push({
+    backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+    backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
     color: "#ffffff",
     endUs: 5_000_000,
+    fontFamily: DEFAULT_TEXT_FONT_FAMILY,
     fontSize: 48,
     id: "title",
     rotationDeg: 0,
     scale: 1,
     startUs: 0,
+    strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+    strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
     text: "Title",
     trackId: "text-track",
     x: 0.5,
@@ -425,15 +439,18 @@ describe("editor interactions", () => {
   it("routes timeline selection, playhead, and toolbar actions", () => {
     const onAddTitle = vi.fn();
     const onAddAudioTrack = vi.fn();
+    const onAddTextTrack = vi.fn();
     const onPlayheadChange = vi.fn();
     const onSelectClip = vi.fn();
     const onSelectTargetAudioTrack = vi.fn();
+    const onSelectTargetTextTrack = vi.fn();
     const onSelectTargetVideoTrack = vi.fn();
     render(
       <Timeline
         canRedo={false}
         canUndo
         onAddAudioTrack={onAddAudioTrack}
+        onAddTextTrack={onAddTextTrack}
         onAddTitle={onAddTitle}
         onAddVideoTrack={vi.fn()}
         onDelete={vi.fn()}
@@ -444,6 +461,7 @@ describe("editor interactions", () => {
         onReorderTracks={vi.fn()}
         onSelectClip={onSelectClip}
         onSelectTargetAudioTrack={onSelectTargetAudioTrack}
+        onSelectTargetTextTrack={onSelectTargetTextTrack}
         onSelectTargetVideoTrack={onSelectTargetVideoTrack}
         onSelectText={vi.fn()}
         onTimelineDurationChange={vi.fn()}
@@ -454,6 +472,7 @@ describe("editor interactions", () => {
         selectedClipId={null}
         selectedTextId={null}
         targetAudioTrackId="audio-track"
+        targetTextTrackId="text-track"
         targetVideoTrackId="video-track"
       />,
     );
@@ -462,6 +481,8 @@ describe("editor interactions", () => {
     seekTimelineRulerAtUs(2_000_000);
     fireEvent.click(screen.getByRole("button", { name: "添加标题" }));
     fireEvent.click(screen.getByRole("button", { name: "新增音频轨" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增文字轨" }));
+    fireEvent.click(screen.getByRole("button", { name: "T1 文字" }));
 
     expect(onSelectClip).toHaveBeenCalledWith("clip");
     expect(onSelectTargetVideoTrack).toHaveBeenCalledWith("video-track");
@@ -469,6 +490,8 @@ describe("editor interactions", () => {
     expect(screen.queryByRole("slider", { name: "时间线播放头" })).toBeNull();
     expect(onAddTitle).toHaveBeenCalledOnce();
     expect(onAddAudioTrack).toHaveBeenCalledOnce();
+    expect(onAddTextTrack).toHaveBeenCalledOnce();
+    expect(onSelectTargetTextTrack).toHaveBeenCalledWith("text-track");
     expect(screen.getByTestId("audio-track").textContent).not.toContain(
       "test.mp4",
     );
@@ -795,6 +818,57 @@ describe("editor interactions", () => {
     expect(onSelectTargetAudioTrack).toHaveBeenCalledWith("audio-track");
     expect(onSelectTargetAudioTrack).toHaveBeenCalledWith("audio-track-2");
     expect(onSelectClip).toHaveBeenCalledWith("audio-clip-2");
+  });
+
+  it("renders ordered text tracks and selects the target text track", () => {
+    const onAddTextTrack = vi.fn();
+    const onSelectTargetTextTrack = vi.fn();
+    render(
+      <Timeline
+        canRedo={false}
+        canUndo={false}
+        onAddAudioTrack={vi.fn()}
+        onAddTextTrack={onAddTextTrack}
+        onAddTitle={vi.fn()}
+        onAddVideoTrack={vi.fn()}
+        onDelete={vi.fn()}
+        onDeleteTrack={vi.fn()}
+        onEdit={vi.fn()}
+        onPlayheadChange={vi.fn()}
+        onRedo={vi.fn()}
+        onReorderTracks={vi.fn()}
+        onSelectClip={vi.fn()}
+        onSelectTargetAudioTrack={vi.fn()}
+        onSelectTargetTextTrack={onSelectTargetTextTrack}
+        onSelectTargetVideoTrack={vi.fn()}
+        onSelectText={vi.fn()}
+        onTimelineDurationChange={vi.fn()}
+        onSplit={vi.fn()}
+        onUndo={vi.fn()}
+        playheadUs={0}
+        project={addSecondTextTrack(projectFixture())}
+        selectedClipId={null}
+        selectedTextId={null}
+        targetAudioTrackId="audio-track"
+        targetTextTrackId="text-track-2"
+        targetVideoTrackId="video-track"
+      />,
+    );
+
+    const textButtons = screen.getAllByRole("button", {
+      name: /^T\d 文字/,
+    });
+    expect(textButtons.map((button) => button.textContent)).toEqual([
+      "T1 文字",
+      "T2 文字 2",
+    ]);
+    expect(textButtons[1]?.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "新增文字轨" }));
+    fireEvent.click(screen.getByRole("button", { name: "T1 文字" }));
+
+    expect(onAddTextTrack).toHaveBeenCalledOnce();
+    expect(onSelectTargetTextTrack).toHaveBeenCalledWith("text-track");
   });
 
   it("emits a complete track reorder command when dragging track headers", () => {
@@ -1614,6 +1688,98 @@ describe("editor interactions", () => {
     }
   });
 
+  it("trims text clips with visible handles", () => {
+    const onEdit = vi.fn();
+    const restorePointerCapture = mockPointerCapture();
+
+    try {
+      render(
+        <Timeline
+          canRedo={false}
+          canUndo={false}
+          onAddAudioTrack={vi.fn()}
+          onAddTitle={vi.fn()}
+          onAddVideoTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onDeleteTrack={vi.fn()}
+          onEdit={onEdit}
+          onPlayheadChange={vi.fn()}
+          onRedo={vi.fn()}
+          onReorderTracks={vi.fn()}
+          onSelectClip={vi.fn()}
+          onSelectTargetAudioTrack={vi.fn()}
+          onSelectTargetVideoTrack={vi.fn()}
+          onSelectText={vi.fn()}
+          onTimelineDurationChange={vi.fn()}
+          onSplit={vi.fn()}
+          onUndo={vi.fn()}
+          playheadUs={0}
+          project={projectFixture()}
+          selectedClipId={null}
+          selectedTextId={null}
+          targetAudioTrackId="audio-track"
+          targetVideoTrackId="video-track"
+        />,
+      );
+
+      fireEvent.change(screen.getByRole("slider", { name: "时间线缩放" }), {
+        target: { value: "160" },
+      });
+      const text = screen.getByRole("button", { name: "Title" });
+      firePointerEvent(
+        screen.getByLabelText("裁剪 文字 Title 开头"),
+        "pointerdown",
+        {
+          clientX: 0,
+          pointerId: 1,
+        },
+      );
+      firePointerEvent(text, "pointermove", {
+        clientX: 160,
+        pointerId: 1,
+      });
+
+      expect(onEdit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          patch: {
+            endUs: 5_000_000,
+            startUs: 1_000_000,
+          },
+          textId: "title",
+          type: "text.update",
+        }),
+        expect.any(String),
+      );
+
+      firePointerEvent(
+        screen.getByLabelText("裁剪 文字 Title 结尾"),
+        "pointerdown",
+        {
+          clientX: 0,
+          pointerId: 2,
+        },
+      );
+      firePointerEvent(text, "pointermove", {
+        clientX: -160,
+        pointerId: 2,
+      });
+
+      expect(onEdit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          patch: {
+            endUs: 4_000_000,
+            startUs: 0,
+          },
+          textId: "title",
+          type: "text.update",
+        }),
+        expect.any(String),
+      );
+    } finally {
+      restorePointerCapture();
+    }
+  });
+
   it("adds the same asset to target video and audio tracks at the playhead", async () => {
     render(<App />);
 
@@ -1651,6 +1817,101 @@ describe("editor interactions", () => {
           }),
         ]),
       );
+    });
+  });
+
+  it("adds a text track, adds default text to the target track, and supports undo redo", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "mock seek 2s" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增文字轨" }));
+    fireEvent.click(screen.getByRole("button", { name: "添加标题" }));
+    fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
+
+    await waitFor(() => {
+      const project = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(project.tracks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "text-track-2",
+            kind: "text",
+            name: "文字 2",
+          }),
+        ]),
+      );
+      expect(project.texts[0]).toEqual(
+        expect.objectContaining({
+          backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+          backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
+          color: "#ffffff",
+          endUs: 7_000_000,
+          fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+          fontSize: 64,
+          startUs: 2_000_000,
+          strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+          strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+          text: "输入文字",
+          trackId: "text-track-2",
+        }),
+      );
+    });
+    expect(
+      screen
+        .getByRole("button", { name: "T2 文字 2" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      const undone = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(undone.texts).toEqual([]);
+      expect(undone.tracks.map((track) => track.id)).toContain("text-track-2");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+
+    await waitFor(() => {
+      const redone = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(redone.texts[0]).toEqual(
+        expect.objectContaining({
+          startUs: 2_000_000,
+          trackId: "text-track-2",
+        }),
+      );
+    });
+  });
+
+  it("adds default text with the minimum duration when the playhead is near the project tail", async () => {
+    const initialProject = createProjectDocument({
+      id: "tail-title-test",
+      name: "Tail title test",
+      now: "2026-08-09T00:00:00.000Z",
+    });
+    initialProject.timeline.durationUs = 10_000_000;
+    render(<App initialProject={initialProject} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "mock seek 9.95s" }));
+    fireEvent.click(screen.getByRole("button", { name: "添加标题" }));
+    fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
+
+    await waitFor(() => {
+      const project = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(project.texts[0]).toEqual(
+        expect.objectContaining({
+          startUs: 9_950_000,
+          endUs: 10_050_000,
+        }),
+      );
+      expect(project.timeline.durationUs).toBe(10_050_000);
     });
   });
 
@@ -2090,6 +2351,294 @@ describe("editor interactions", () => {
     expect(
       screen.getByText("操作未提交：不能删除最后一条音频轨道"),
     ).toBeTruthy();
+  });
+
+  it("emits complete text inspector commands for time, style, and font fields", () => {
+    const onExecute = vi.fn();
+    const project = projectFixture();
+    render(
+      <Inspector
+        onExecute={onExecute}
+        project={project}
+        selectedClipId={null}
+        selectedTextId="title"
+      />,
+    );
+
+    expect(screen.getByLabelText("标题文本")).toBeTruthy();
+    expect(screen.getByLabelText("标题开始时间")).toBeTruthy();
+    expect(screen.getByLabelText("标题结束时间")).toBeTruthy();
+    expect(screen.getByLabelText("标题持续时长")).toBeTruthy();
+    expect(screen.getByLabelText("标题字号")).toBeTruthy();
+    expect(screen.getByLabelText("标题颜色")).toBeTruthy();
+    expect(screen.getByLabelText("标题描边颜色")).toBeTruthy();
+    expect(screen.getByLabelText("标题描边宽度")).toBeTruthy();
+    expect(screen.getByLabelText("标题背景底色")).toBeTruthy();
+    expect(screen.getByLabelText("标题背景透明度")).toBeTruthy();
+    expect(screen.getByLabelText("标题字体预设")).toBeTruthy();
+    expect(screen.getByLabelText("标题字体名称")).toBeTruthy();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "加载系统字体",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("标题开始时间"), {
+      target: { value: "1.25" },
+    });
+    fireEvent.change(screen.getByLabelText("标题结束时间"), {
+      target: { value: "4" },
+    });
+    fireEvent.change(screen.getByLabelText("标题持续时长"), {
+      target: { value: "2.5" },
+    });
+    fireEvent.change(screen.getByLabelText("标题字号"), {
+      target: { value: "64" },
+    });
+    fireEvent.change(screen.getByLabelText("标题颜色"), {
+      target: { value: "#00ff00" },
+    });
+    fireEvent.change(screen.getByLabelText("标题描边颜色"), {
+      target: { value: "#112233" },
+    });
+    fireEvent.change(screen.getByLabelText("标题描边宽度"), {
+      target: { value: "3" },
+    });
+    fireEvent.change(screen.getByLabelText("标题背景底色"), {
+      target: { value: "#223344" },
+    });
+    fireEvent.change(screen.getByLabelText("标题背景透明度"), {
+      target: { value: "0.4" },
+    });
+    fireEvent.change(screen.getByLabelText("标题字体预设"), {
+      target: { value: "Arial, sans-serif" },
+    });
+    fireEvent.change(screen.getByLabelText("标题字体名称"), {
+      target: { value: '"PingFang SC", sans-serif' },
+    });
+
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: { startUs: 1_250_000 },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-startUs"),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: { endUs: 4_000_000 },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-endUs"),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: { endUs: 2_500_000 },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-durationUs"),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: {
+          backgroundColor: "#223344",
+        },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-backgroundColor"),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: {
+          backgroundOpacity: 0.4,
+        },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-backgroundOpacity"),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: {
+          color: "#00ff00",
+        },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.any(String),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: {
+          strokeColor: "#112233",
+        },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.any(String),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: {
+          strokeWidth: 3,
+        },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.any(String),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: { fontFamily: "Arial, sans-serif" },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-fontFamily"),
+    );
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: { fontFamily: '"PingFang SC", sans-serif' },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-fontFamily"),
+    );
+  });
+
+  it("does not emit text inspector commands for invalid time or style input", () => {
+    const onExecute = vi.fn();
+    const project = projectFixture();
+    project.texts.push({
+      ...project.texts[0]!,
+      endUs: 8_000_000,
+      id: "second-title",
+      startUs: 6_000_000,
+      text: "Second",
+    });
+    render(
+      <Inspector
+        onExecute={onExecute}
+        project={project}
+        selectedClipId={null}
+        selectedTextId="title"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("标题开始时间"), {
+      target: { value: "5" },
+    });
+    fireEvent.change(screen.getByLabelText("标题开始时间"), {
+      target: { value: "4.95" },
+    });
+    fireEvent.change(screen.getByLabelText("标题结束时间"), {
+      target: { value: "7" },
+    });
+    fireEvent.change(screen.getByLabelText("标题结束时间"), {
+      target: { value: "0.05" },
+    });
+    fireEvent.change(screen.getByLabelText("标题持续时长"), {
+      target: { value: "0" },
+    });
+    fireEvent.change(screen.getByLabelText("标题持续时长"), {
+      target: { value: "0.05" },
+    });
+    fireEvent.change(screen.getByLabelText("标题字号"), {
+      target: { value: "0" },
+    });
+    fireEvent.change(screen.getByLabelText("标题描边宽度"), {
+      target: { value: "-1" },
+    });
+    fireEvent.change(screen.getByLabelText("标题背景透明度"), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByLabelText("标题字体名称"), {
+      target: { value: "" },
+    });
+
+    expect(onExecute).not.toHaveBeenCalled();
+  });
+
+  it("loads system fonts for the text inspector when the browser API is available", async () => {
+    const onExecute = vi.fn();
+    Object.defineProperty(window, "queryLocalFonts", {
+      configurable: true,
+      value: vi.fn(async () => [
+        { family: "System Font" },
+        { family: "System Font" },
+        { family: "Display Font" },
+      ]),
+    });
+
+    render(
+      <Inspector
+        onExecute={onExecute}
+        project={projectFixture()}
+        selectedClipId={null}
+        selectedTextId="title"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "加载系统字体" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Display Font")).toBeTruthy();
+    });
+
+    fireEvent.change(screen.getByLabelText("标题字体预设"), {
+      target: { value: "Display Font" },
+    });
+
+    expect(onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patch: { fontFamily: "Display Font" },
+        textId: "title",
+        type: "text.update",
+      }),
+      expect.stringContaining("inspector-text-title-fontFamily"),
+    );
+  });
+
+  it("updates text style through the App command bus and supports undo and redo", async () => {
+    render(<App initialProject={projectFixture()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Title" }));
+    fireEvent.change(screen.getByLabelText("标题背景透明度"), {
+      target: { value: "0.5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Project JSON" }));
+
+    await waitFor(() => {
+      const project = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(project.texts[0]?.backgroundOpacity).toBe(0.5);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      const project = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(project.texts[0]?.backgroundOpacity).toBe(
+        DEFAULT_TEXT_BACKGROUND_OPACITY,
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+
+    await waitFor(() => {
+      const project = JSON.parse(
+        screen.getByTestId("project-json").textContent ?? "{}",
+      ) as ProjectDocument;
+      expect(project.texts[0]?.backgroundOpacity).toBe(0.5);
+    });
   });
 
   it("does not trigger global undo from focused track controls", async () => {

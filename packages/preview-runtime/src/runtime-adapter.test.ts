@@ -82,13 +82,18 @@ function project(): ProjectDocument {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     texts: [
       {
+        backgroundColor: "#112233",
+        backgroundOpacity: 0.45,
         color: "#ffffff",
         endUs: 4_000_000,
+        fontFamily: '"PingFang SC", sans-serif',
         fontSize: 48,
         id: "title",
         rotationDeg: 15,
         scale: 1.2,
         startUs: 2_000_000,
+        strokeColor: "#010203",
+        strokeWidth: 3,
         text: "真实标题",
         trackId: "text",
         x: 0.5,
@@ -382,9 +387,116 @@ describe("ProjectRuntimeAdapter", () => {
       y: 669.6,
     });
     expect(rendered[1]?.text).toMatchObject({
+      backgroundColor: "#112233",
+      backgroundOpacity: 0.45,
+      color: "#ffffff",
+      fontFamily: '"PingFang SC", sans-serif',
       fontSize: 48,
+      strokeColor: "#010203",
+      strokeWidth: 3,
       value: "真实标题",
     });
+  });
+
+  it("evaluates styled text tracks by time range and track order", () => {
+    const document: ProjectDocument = {
+      ...project(),
+      clips: [],
+      texts: [
+        {
+          backgroundColor: "#001122",
+          backgroundOpacity: 0.5,
+          color: "#ff0000",
+          endUs: 3_000_000,
+          fontFamily: "Arial, sans-serif",
+          fontSize: 40,
+          id: "lower",
+          rotationDeg: 0,
+          scale: 1,
+          startUs: 1_000_000,
+          strokeColor: "#ffffff",
+          strokeWidth: 2,
+          text: "Lower",
+          trackId: "text-low",
+          x: 0.4,
+          y: 0.4,
+        },
+        {
+          backgroundColor: "#334455",
+          backgroundOpacity: 0.25,
+          color: "#00ff00",
+          endUs: 4_000_000,
+          fontFamily: '"Display Font", serif',
+          fontSize: 32,
+          id: "upper",
+          rotationDeg: -10,
+          scale: 1.4,
+          startUs: 2_000_000,
+          strokeColor: "#000000",
+          strokeWidth: 4,
+          text: "Upper",
+          trackId: "text-high",
+          x: 0.6,
+          y: 0.3,
+        },
+      ],
+      tracks: [
+        {
+          id: "text-high",
+          kind: "text",
+          locked: false,
+          muted: false,
+          name: "T2",
+          order: 7,
+        },
+        {
+          id: "text-low",
+          kind: "text",
+          locked: false,
+          muted: false,
+          name: "T1",
+          order: 3,
+        },
+      ],
+    };
+    const adapter = new ProjectRuntimeAdapter();
+
+    expect(adapter.evaluate(document, 999_999).activeEntities).toHaveLength(0);
+
+    const overlapping = adapter.evaluate(document, 2_500_000);
+    expect(overlapping.activeEntities.map((entity) => entity.id)).toEqual([
+      "text:lower",
+      "text:upper",
+    ]);
+    expect(
+      overlapping.activeEntities.map((entity) => entity.render.order),
+    ).toEqual([3, 7]);
+    expect(overlapping.activeEntities[0]?.text).toMatchObject({
+      backgroundColor: "#001122",
+      backgroundOpacity: 0.5,
+      color: "#ff0000",
+      fontFamily: "Arial, sans-serif",
+      fontSize: 20,
+      strokeColor: "#ffffff",
+      strokeWidth: 1,
+      value: "Lower",
+    });
+    expect(overlapping.activeEntities[1]?.transform).toMatchObject({
+      rotationRad: (-10 * Math.PI) / 180,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      x: 576,
+      y: 162,
+    });
+
+    expect(
+      adapter
+        .evaluate(document, 3_000_000)
+        .activeEntities.map((entity) => entity.id),
+    ).toEqual(["text:upper"]);
+    expect(adapter.evaluate(document, 4_000_000).activeEntities).toHaveLength(
+      0,
+    );
   });
 });
 

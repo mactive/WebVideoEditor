@@ -1,4 +1,11 @@
-import type { ProjectDocument } from "./schema";
+import {
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
+  type ProjectDocument,
+} from "./schema";
 
 export function createTestProject(): ProjectDocument {
   return {
@@ -71,7 +78,12 @@ export function createTestProject(): ProjectDocument {
         startUs: 0,
         endUs: 3_000_000,
         fontSize: 48,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
         color: "#ffffff",
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
         x: 0.5,
         y: 0.5,
         scale: 1,

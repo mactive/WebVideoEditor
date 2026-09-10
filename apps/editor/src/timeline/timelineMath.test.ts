@@ -1,5 +1,10 @@
 import {
   createProjectDocument,
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
   type ProjectDocument,
 } from "@web-video-editor/domain";
 import { describe, expect, it } from "vitest";
@@ -10,6 +15,8 @@ import {
   clampClipSourceEnd,
   clampClipTrimStart,
   clampTextMove,
+  clampTextTrimEnd,
+  clampTextTrimStart,
   pixelsToTimeUs,
   projectDurationUs,
   timeUsToPixels,
@@ -225,26 +232,36 @@ describe("timeline math", () => {
     });
     project.texts.push(
       {
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
         color: "#ffffff",
         endUs: 2_000_000,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
         fontSize: 48,
         id: "title-1",
         rotationDeg: 0,
         scale: 1,
         startUs: 0,
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
         text: "Title 1",
         trackId: "text-track",
         x: 0.5,
         y: 0.2,
       },
       {
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
         color: "#ffffff",
         endUs: 3_000_000,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
         fontSize: 48,
         id: "title-2",
         rotationDeg: 0,
         scale: 1,
         startUs: 1_000_000,
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
         text: "Title 2",
         trackId: "text-track-2",
         x: 0.5,
@@ -255,5 +272,63 @@ describe("timeline math", () => {
     expect(clampTextMove(project, "title-1", 1_500_000, "text-track-2")).toBe(
       3_000_000,
     );
+  });
+
+  it("clamps text trim edits against minimum duration and same-track conflicts", () => {
+    const project = projectWithClips();
+    project.texts.push(
+      {
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
+        color: "#ffffff",
+        endUs: 2_000_000,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+        fontSize: 48,
+        id: "title-1",
+        rotationDeg: 0,
+        scale: 1,
+        startUs: 0,
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+        text: "Title 1",
+        trackId: "text-track",
+        x: 0.5,
+        y: 0.2,
+      },
+      {
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
+        color: "#ffffff",
+        endUs: 5_000_000,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+        fontSize: 48,
+        id: "title-2",
+        rotationDeg: 0,
+        scale: 1,
+        startUs: 3_000_000,
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+        text: "Title 2",
+        trackId: "text-track",
+        x: 0.5,
+        y: 0.2,
+      },
+    );
+
+    expect(clampTextTrimEnd(project, project.texts[0]!, 4_000_000)).toEqual({
+      endUs: 3_000_000,
+      limit: "track-conflict",
+      startUs: 0,
+    });
+    expect(clampTextTrimStart(project, project.texts[1]!, 1_000_000)).toEqual({
+      endUs: 5_000_000,
+      limit: "track-conflict",
+      startUs: 2_000_000,
+    });
+    expect(clampTextTrimEnd(project, project.texts[0]!, 50_000)).toEqual({
+      endUs: 100_000,
+      limit: "minimum-duration",
+      startUs: 0,
+    });
   });
 });

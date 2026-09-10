@@ -1,7 +1,13 @@
-import type {
-  Asset,
-  ProjectCommand,
-  ProjectDocument,
+import {
+  DEFAULT_TEXT_BACKGROUND_COLOR,
+  DEFAULT_TEXT_BACKGROUND_OPACITY,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_STROKE_COLOR,
+  DEFAULT_TEXT_STROKE_WIDTH,
+  MIN_TEXT_DURATION_US,
+  type Asset,
+  type ProjectCommand,
+  type ProjectDocument,
 } from "@web-video-editor/domain";
 import type {
   BrowserMediaSource,
@@ -51,6 +57,7 @@ import {
   createEditorStore,
   playheadChanged,
   targetAudioTrackSelected,
+  targetTextTrackSelected,
   targetVideoTrackSelected,
   textSelected,
 } from "./store";
@@ -71,6 +78,7 @@ const TOP_WORKSPACE_DEFAULT_HEIGHT_PX = 570;
 const TOP_WORKSPACE_MIN_HEIGHT_PX = 280;
 const TOP_WORKSPACE_MAX_HEIGHT_PX = 780;
 const TOP_WORKSPACE_COLLAPSED_HEIGHT_PX = 260;
+const DEFAULT_TEXT_DURATION_US = 5_000_000;
 
 function clampTopWorkspaceHeight(value: number): number {
   return Math.max(
@@ -136,18 +144,21 @@ function proxyRuntimeSource(
   };
 }
 
-function mediaTracksInOrder(project: ProjectDocument, kind: TimelineAddKind) {
+function tracksInOrder(
+  project: ProjectDocument,
+  kind: ProjectDocument["tracks"][number]["kind"],
+) {
   return project.tracks
     .filter((track) => track.kind === kind)
     .sort((left, right) => left.order - right.order);
 }
 
-function resolveTargetMediaTrackId(
+function resolveTargetTrackId(
   project: ProjectDocument,
-  kind: TimelineAddKind,
+  kind: ProjectDocument["tracks"][number]["kind"],
   preferredTrackId: string | null,
 ): string | null {
-  const tracks = mediaTracksInOrder(project, kind);
+  const tracks = tracksInOrder(project, kind);
   return tracks.some((track) => track.id === preferredTrackId)
     ? preferredTrackId
     : (tracks[0]?.id ?? null);
@@ -244,17 +255,22 @@ export function App({ initialProject }: AppProps = {}) {
     selectedClipId,
     selectedTextId,
     targetAudioTrackId: sessionTargetAudioTrackId,
+    targetTextTrackId: sessionTargetTextTrackId,
     targetVideoTrackId: sessionTargetVideoTrackId,
   } = state.session;
   const targetVideoTrackId = useMemo(
     () =>
-      resolveTargetMediaTrackId(project, "video", sessionTargetVideoTrackId),
+      resolveTargetTrackId(project, "video", sessionTargetVideoTrackId),
     [project, sessionTargetVideoTrackId],
   );
   const targetAudioTrackId = useMemo(
     () =>
-      resolveTargetMediaTrackId(project, "audio", sessionTargetAudioTrackId),
+      resolveTargetTrackId(project, "audio", sessionTargetAudioTrackId),
     [project, sessionTargetAudioTrackId],
+  );
+  const targetTextTrackId = useMemo(
+    () => resolveTargetTrackId(project, "text", sessionTargetTextTrackId),
+    [project, sessionTargetTextTrackId],
   );
   const actions = useMemo(
     () =>
@@ -348,6 +364,12 @@ export function App({ initialProject }: AppProps = {}) {
       editorStore.dispatch(targetAudioTrackSelected(targetAudioTrackId));
     }
   }, [editorStore, sessionTargetAudioTrackId, targetAudioTrackId]);
+
+  useEffect(() => {
+    if (sessionTargetTextTrackId !== targetTextTrackId) {
+      editorStore.dispatch(targetTextTrackSelected(targetTextTrackId));
+    }
+  }, [editorStore, sessionTargetTextTrackId, targetTextTrackId]);
 
   useEffect(
     () => () => {
@@ -443,7 +465,7 @@ export function App({ initialProject }: AppProps = {}) {
       setStatus("该素材没有可添加到音频轨的音频流");
       return;
     }
-    const targetTrackId = resolveTargetMediaTrackId(
+    const targetTrackId = resolveTargetTrackId(
       current,
       kind,
       kind === "video"
@@ -501,7 +523,7 @@ export function App({ initialProject }: AppProps = {}) {
   const addMediaTrack = (kind: TimelineAddKind) => {
     const current = editorStore.getState().project.document;
     const existingTrackIds = new Set(
-      mediaTracksInOrder(current, kind).map((track) => track.id),
+      tracksInOrder(current, kind).map((track) => track.id),
     );
     const command: ProjectCommand =
       kind === "video"
@@ -512,9 +534,9 @@ export function App({ initialProject }: AppProps = {}) {
     }
     const nextProject = editorStore.getState().project.document;
     const newTrack =
-      mediaTracksInOrder(nextProject, kind).find(
+      tracksInOrder(nextProject, kind).find(
         (track) => !existingTrackIds.has(track.id),
-      ) ?? mediaTracksInOrder(nextProject, kind).at(-1);
+      ) ?? tracksInOrder(nextProject, kind).at(-1);
     if (newTrack) {
       editorStore.dispatch(
         kind === "video"
@@ -525,35 +547,67 @@ export function App({ initialProject }: AppProps = {}) {
     }
   };
 
+  const addTextTrack = () => {
+    const current = editorStore.getState().project.document;
+    const existingTrackIds = new Set(
+      tracksInOrder(current, "text").map((track) => track.id),
+    );
+    if (!execute({ type: "track.text.add" })) {
+      return;
+    }
+    const nextProject = editorStore.getState().project.document;
+    const newTrack =
+      tracksInOrder(nextProject, "text").find(
+        (track) => !existingTrackIds.has(track.id),
+      ) ?? tracksInOrder(nextProject, "text").at(-1);
+    if (newTrack) {
+      editorStore.dispatch(targetTextTrackSelected(newTrack.id));
+      setStatus(`已新增并选中 ${newTrack.name}`);
+    }
+  };
+
   const addTitle = () => {
     const current = editorStore.getState().project.document;
     const startUs = editorStore.getState().session.playheadUs;
-    const targetTextTrackId =
-      [...current.tracks]
-        .filter((track) => track.kind === "text")
-        .sort((left, right) => left.order - right.order)[0]?.id ?? null;
-    if (!targetTextTrackId) {
+    const resolvedTargetTextTrackId = resolveTargetTrackId(
+      current,
+      "text",
+      editorStore.getState().session.targetTextTrackId,
+    );
+    if (!resolvedTargetTextTrackId) {
       setStatus("当前工程没有可添加标题的文字轨道");
       return;
     }
     const textId = `title-${crypto.randomUUID()}`;
-    execute({
+    const endUs = Math.max(
+      startUs + MIN_TEXT_DURATION_US,
+      Math.min(startUs + DEFAULT_TEXT_DURATION_US, projectDurationUs(current)),
+    );
+    const committed = execute({
       text: {
+        backgroundColor: DEFAULT_TEXT_BACKGROUND_COLOR,
+        backgroundOpacity: DEFAULT_TEXT_BACKGROUND_OPACITY,
         color: "#ffffff",
-        endUs: Math.max(startUs + 5_000_000, projectDurationUs(current)),
+        endUs,
+        fontFamily: DEFAULT_TEXT_FONT_FAMILY,
         fontSize: 64,
         id: textId,
         rotationDeg: 0,
         scale: 1,
         startUs,
-        text: "输入标题",
-        trackId: targetTextTrackId,
+        strokeColor: DEFAULT_TEXT_STROKE_COLOR,
+        strokeWidth: DEFAULT_TEXT_STROKE_WIDTH,
+        text: "输入文字",
+        trackId: resolvedTargetTextTrackId,
         x: 0.5,
         y: 0.15,
       },
       type: "text.add",
     });
-    editorStore.dispatch(textSelected(textId));
+    if (committed) {
+      editorStore.dispatch(textSelected(textId));
+      editorStore.dispatch(targetTextTrackSelected(resolvedTargetTextTrackId));
+    }
   };
 
   const splitSelected = () => {
@@ -619,7 +673,7 @@ export function App({ initialProject }: AppProps = {}) {
     }
     editorStore.dispatch(
       targetVideoTrackSelected(
-        resolveTargetMediaTrackId(
+        resolveTargetTrackId(
           nextProject,
           "video",
           before.session.targetVideoTrackId,
@@ -628,10 +682,19 @@ export function App({ initialProject }: AppProps = {}) {
     );
     editorStore.dispatch(
       targetAudioTrackSelected(
-        resolveTargetMediaTrackId(
+        resolveTargetTrackId(
           nextProject,
           "audio",
           before.session.targetAudioTrackId,
+        ),
+      ),
+    );
+    editorStore.dispatch(
+      targetTextTrackSelected(
+        resolveTargetTrackId(
+          nextProject,
+          "text",
+          before.session.targetTextTrackId,
         ),
       ),
     );
@@ -796,6 +859,7 @@ export function App({ initialProject }: AppProps = {}) {
         canRedo={commandController.canRedo}
         canUndo={commandController.canUndo}
         onAddAudioTrack={() => addMediaTrack("audio")}
+        onAddTextTrack={addTextTrack}
         onAddTitle={addTitle}
         onAddVideoTrack={() => addMediaTrack("video")}
         onDelete={deleteSelected}
@@ -809,6 +873,9 @@ export function App({ initialProject }: AppProps = {}) {
         onSelectClip={(clipId) => editorStore.dispatch(clipSelected(clipId))}
         onSelectTargetAudioTrack={(trackId) =>
           editorStore.dispatch(targetAudioTrackSelected(trackId))
+        }
+        onSelectTargetTextTrack={(trackId) =>
+          editorStore.dispatch(targetTextTrackSelected(trackId))
         }
         onSelectTargetVideoTrack={(trackId) =>
           editorStore.dispatch(targetVideoTrackSelected(trackId))
@@ -824,6 +891,7 @@ export function App({ initialProject }: AppProps = {}) {
         selectedClipId={selectedClipId}
         selectedTextId={selectedTextId}
         targetAudioTrackId={targetAudioTrackId}
+        targetTextTrackId={targetTextTrackId}
         targetVideoTrackId={targetVideoTrackId}
       />
 

@@ -68,8 +68,13 @@ function compileEntities(
         visible: false,
       },
       text: {
+        backgroundColor: text.backgroundColor,
+        backgroundOpacity: text.backgroundOpacity,
         color: text.color,
+        fontFamily: text.fontFamily,
         fontSize: text.fontSize * scale,
+        strokeColor: text.strokeColor,
+        strokeWidth: text.strokeWidth * scale,
         value: text.text,
       },
       timeline: {

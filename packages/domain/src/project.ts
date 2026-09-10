@@ -6,6 +6,7 @@ import {
 } from "./schema";
 
 export const MIN_CLIP_DURATION_US = 100_000;
+export const MIN_TEXT_DURATION_US = 100_000;
 
 export type CreateProjectOptions = {
   id: string;
@@ -15,6 +16,10 @@ export type CreateProjectOptions = {
 
 export function clipDurationUs(clip: ProjectDocument["clips"][number]): number {
   return clip.sourceEndUs - clip.sourceStartUs;
+}
+
+export function textDurationUs(text: ProjectDocument["texts"][number]): number {
+  return text.endUs - text.startUs;
 }
 
 export function projectContentEndUs(

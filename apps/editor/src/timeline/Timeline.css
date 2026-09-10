@@ -277,8 +277,7 @@
 }
 
 .timeline .timeline__clip--text {
-  justify-content: flex-start;
-  padding: 0 8px;
+  justify-content: space-between;
   color: #ffe7af;
   background: #624c21;
   border-color: #9d7934;
@@ -286,8 +285,14 @@
   touch-action: none;
 }
 
-.timeline .timeline__clip--text[aria-pressed="true"] {
+.timeline .timeline__clip--text[aria-selected="true"] {
   outline: 2px solid #ffe3a0;
+}
+
+.timeline__clip--text > span {
+  overflow: hidden;
+  padding: 0 7px;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 900px) {
